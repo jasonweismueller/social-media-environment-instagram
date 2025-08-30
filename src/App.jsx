@@ -83,6 +83,27 @@ const storage = {
   }
 };
 
+// --- Remote logging (Google Apps Script) ---
+const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec"; // your Web App URL
+const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // MUST match TOKEN in Code.gs
+
+async function sendToSheet(row, events) {
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      mode: "cors",
+      body: JSON.stringify({ token: GS_TOKEN, row, events }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error("Apps Script returned not ok");
+    console.debug("✅ Logged to Google Sheet");
+    return true;
+  } catch (err) {
+    console.warn("⚠️ Failed to log to Google Sheet:", err);
+    return false;
+  }
+}
 
 /* ---------------------------- Sample + Generators -------------------------- */
 const pravatar = (n) => `https://i.pravatar.cc/64?img=${n}`;
@@ -1527,50 +1548,64 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
       <div className={`app-shell ${((!hasEntered && !onAdmin) || submitted) ? "blurred" : ""}`}>
         <RouteAwareTopbar />
         <Routes>
-          <Route
-            path="/"
-            element={
-              <Feed
-                posts={orderedPosts}
-                registerViewRef={registerViewRef}
-                disabled={disabled}
-                log={log}
-                showComposer={showComposer}
-                onSubmit={() => {
-                  const ts = now();
-                  submitTsRef.current = ts;
-                
-                  // record submit (this still writes to state/history)
-                  log("feed_submit");
-                
-                  // build a local, up-to-date event list that includes the submit event
-                  const eventsWithSubmit = [
-                    ...events,
-                    {
-                      session_id: sessionIdRef.current,
-                      participant_id: participantId || null,
-                      timestamp_iso: fmtTime(ts),
-                      elapsed_ms: ts - t0Ref.current,
-                      ts_ms: ts,
-                      action: "feed_submit",
-                    },
-                  ];
-                
-                  const row = buildParticipantRow({
-                    session_id: sessionIdRef.current,
-                    participant_id: participantId,
-                    events: eventsWithSubmit,
-                    posts,
-                  });
-                
-                  storage.upsertParticipantRow(row);
-                  setParticipants(storage.loadParticipants()); // refresh roster in UI
-                
-                  setSubmitted(true);
-                }}
-              />
-            }
-          />
+        <Route
+  path="/"
+  element={
+    <Feed
+      posts={orderedPosts}
+      registerViewRef={registerViewRef}
+      disabled={disabled}
+      log={log}
+      showComposer={showComposer}
+      onSubmit={async () => {
+        if (submitted || disabled) return;     // guard double-clicks
+        setDisabled(true);
+
+        const ts = now();
+        submitTsRef.current = ts;
+
+        // 1) record submit (keeps your in-memory history consistent)
+        log("feed_submit");
+
+        // 2) build a list that DEFINITELY includes the submit event
+        const submitEvent = {
+          session_id: sessionIdRef.current,
+          participant_id: participantId || null,
+          timestamp_iso: fmtTime(ts),
+          elapsed_ms: ts - t0Ref.current,
+          ts_ms: ts,
+          action: "feed_submit",
+        };
+        const eventsWithSubmit = [...events, submitEvent];
+
+        // 3) compute participant row
+        const row = buildParticipantRow({
+          session_id: sessionIdRef.current,
+          participant_id: participantId,
+          events: eventsWithSubmit,
+          posts,
+        });
+
+        // 4) persist locally (always)
+        storage.upsertParticipantRow(row);
+        setParticipants(storage.loadParticipants());
+
+        // 5) reflect UI state immediately
+        setSubmitted(true);
+
+        // 6) try to send to Google Sheet (best-effort)
+        try {
+          const ok = await sendToSheet(row, eventsWithSubmit); // uses your GS endpoint/token
+          showToast(ok ? "Submitted ✔︎" : "Saved locally. Sync failed.");
+        } catch {
+          showToast("Saved locally. Sync failed.");
+        } finally {
+          setDisabled(false);
+        }
+      }}
+    />
+  }
+/>
           <Route
             path="/admin"
             element={
