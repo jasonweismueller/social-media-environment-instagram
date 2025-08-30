@@ -84,24 +84,31 @@ const storage = {
 };
 
 // --- Remote logging (Google Apps Script) ---
-const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec"; // your Web App URL
-const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // MUST match TOKEN in Code.gs
+const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec";
+const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // must match Code.gs
 
 async function sendToSheet(row, events) {
-  const payload = JSON.stringify({ token: GS_TOKEN, row, events });
+  const text = JSON.stringify({ token: GS_TOKEN, row, events });
 
-  // Send as a "simple request" to avoid CORS preflight (no custom headers, text/plain)
-  // Use no-cors so the browser won't block; we can't read the response, but the server receives it.
+  // 1) Try beacon (fire-and-forget, survives tab close)
+  if (navigator.sendBeacon) {
+    const ok = navigator.sendBeacon(
+      GS_ENDPOINT,
+      new Blob([text], { type: "text/plain;charset=UTF-8" })
+    );
+    return ok; // boolean
+  }
+
+  // 2) Fallback: simple request (no preflight)
   try {
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",
-      // do NOT set application/json; that triggers preflight
+      mode: "no-cors", // opaque, but delivered
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body: payload,
-      keepalive: true, // helps when user immediately closes tab
+      body: text,
+      keepalive: true,
     });
-    return true; // assume success (opaque response by design)
+    return true;
   } catch (err) {
     console.warn("sendToSheet failed:", err);
     return false;
@@ -1561,16 +1568,16 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
       log={log}
       showComposer={showComposer}
       onSubmit={async () => {
-        if (submitted || disabled) return;     // guard double-clicks
+        if (submitted || disabled) return;
         setDisabled(true);
-
+      
         const ts = now();
         submitTsRef.current = ts;
-
-        // 1) record submit (keeps your in-memory history consistent)
+      
+        // record submit into your in-memory log
         log("feed_submit");
-
-        // 2) build a list that DEFINITELY includes the submit event
+      
+        // build an events array that definitely includes the submit
         const submitEvent = {
           session_id: sessionIdRef.current,
           participant_id: participantId || null,
@@ -1580,43 +1587,30 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
           action: "feed_submit",
         };
         const eventsWithSubmit = [...events, submitEvent];
-
-        // 3) compute participant row
+      
+        // compute participant row
         const row = buildParticipantRow({
           session_id: sessionIdRef.current,
           participant_id: participantId,
           events: eventsWithSubmit,
           posts,
         });
-
-        // 4) persist locally (always)
+      
+        // always save locally (so you never lose data)
         storage.upsertParticipantRow(row);
         setParticipants(storage.loadParticipants());
-
-        // 5) send first, then show Thank You on success
-        try {
-          const ok = await sendToSheet(row, eventsWithSubmit);
-          if (ok) {
-            setSubmitted(true);
-            showToast("Submitted ✔︎");
-          } else {
-            showToast("Saved locally. Sync failed.");
-          }
-        } catch {
+      
+        // try to send to Google Sheet
+        const ok = await sendToSheet(row, eventsWithSubmit);
+      
+        if (ok) {
+          setSubmitted(true);
+          showToast("Submitted ✔︎");
+        } else {
           showToast("Saved locally. Sync failed.");
-        } finally {
-          setDisabled(false);
         }
-
-        // 6) try to send to Google Sheet (best-effort)
-        try {
-          const ok = await sendToSheet(row, eventsWithSubmit); // uses your GS endpoint/token
-          showToast(ok ? "Submitted ✔︎" : "Saved locally. Sync failed.");
-        } catch {
-          showToast("Saved locally. Sync failed.");
-        } finally {
-          setDisabled(false);
-        }
+      
+        setDisabled(false);
       }}
     />
   }
