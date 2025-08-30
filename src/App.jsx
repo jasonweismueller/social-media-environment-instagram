@@ -38,6 +38,27 @@ const toggleInSet = (setObj, id) => {
   return next;
 };
 
+// put this near your other helpers in App.jsx
+
+async function savePostsToBackend(posts) {
+  try {
+    await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "no-cors", // avoids CORS preflight
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({
+        token: GS_TOKEN,
+        action: "publish_posts",
+        posts,
+      }),
+    });
+    return true; // can't read opaque response, so assume success
+  } catch (err) {
+    console.warn("Publish failed:", err);
+    return false;
+  }
+}
+
 /* --------------------- Reactions helpers (shared) -------------------------- */
 const REACTION_META = {
   like:  { emoji: "👍", label: "Like"  },
@@ -87,32 +108,68 @@ const storage = {
 const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec";
 const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // must match Code.gs
 
-async function sendToSheet(row, events) {
-  const payload = JSON.stringify({ token: GS_TOKEN, row, events });
-  const blob = new Blob([payload], { type: "text/plain;charset=UTF-8" });
+// Send participant data with an explicit header (matches Admin CSV)
+async function sendToSheet(header, row, events) {
+  const payload = {
+    token: GS_TOKEN,
+    action: "log_participant",
+    header,   // <— important
+    row,
+    events
+  };
+  const blob = new Blob([JSON.stringify(payload)], { type: "text/plain;charset=UTF-8" });
 
-  // 1) Try beacon (best for “thank you” overlays / tab closes)
   if (navigator.sendBeacon) {
-    const ok = navigator.sendBeacon(GS_ENDPOINT, blob);
-    console.debug("sendBeacon ->", ok);
-    return ok; // true/false
+    return navigator.sendBeacon(GS_ENDPOINT, blob);
   }
-
-  // 2) Fallback: no-cors fetch (opaque response; assume success if no throw)
   try {
     await fetch(GS_ENDPOINT, {
       method: "POST",
       mode: "no-cors",
       body: blob,
-      keepalive: true
+      keepalive: true,
     });
-    console.debug("fetch(no-cors) fired");
     return true;
   } catch (err) {
-    console.warn("fetch(no-cors) failed:", err);
+    console.warn("sendToSheet failed:", err);
     return false;
   }
 }
+
+
+async function publishPostsToSheet(posts) {
+  // Fire-and-forget to avoid CORS preflight complexity
+  try {
+    await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({ token: GS_TOKEN, action: "publish_posts", posts }),
+      keepalive: true,
+    });
+    return true; // opaque response; assume success
+  } catch {
+    return false;
+  }
+}
+
+// === Feed (posts) backend ===
+const POSTS_GET_URL  = GS_ENDPOINT + "?path=posts";
+const POSTS_POST_URL = GS_ENDPOINT; // POST with { path:"posts", posts, token }
+
+async function loadPostsFromBackend() {
+  try {
+    const res = await fetch(POSTS_GET_URL, { method: "GET", mode: "cors" });
+    const data = await res.json();
+    // Expect an array of post objects (same shape you already use)
+    if (Array.isArray(data) && data.length) return data;
+  } catch (e) {
+    console.warn("loadPostsFromBackend failed:", e);
+  }
+  return null; // fall back to local posts if unavailable
+}
+
+
 
 /* ---------------------------- Sample + Generators -------------------------- */
 const pravatar = (n) => `https://i.pravatar.cc/64?img=${n}`;
@@ -136,7 +193,7 @@ const randomSVG = (title = "Image") => {
 // Seed posts (first run). Thereafter, we load from localStorage.
 const SEEDED_POSTS = [
   {
-    id: "p1",
+    id: "seed_post_1",
     author: "Thomas Johnson",
     avatarMode: "random",
     avatarUrl: pravatar(11),
@@ -158,7 +215,7 @@ const SEEDED_POSTS = [
     metrics: { comments: 0, shares: 0 },
   },
   {
-    id: "p2",
+    id: "seed_post_2",
     author: "Rina Park",
     avatarMode: "random",
     avatarUrl: pravatar(22),
@@ -179,7 +236,7 @@ const SEEDED_POSTS = [
     metrics: { comments: 0, shares: 0 },
   },
   {
-    id: "p3",
+    id: "seed_post_3",
     author: "City Green Crew",
     avatarMode: "random",
     avatarUrl: pravatar(33),
@@ -843,7 +900,7 @@ function AdminDashboard({
   posts, setPosts,
   randomize, setRandomize,
   showComposer, setShowComposer,
-  downloadCSV, copyJSON, resetLog, participants = [], clearRoster
+  downloadCSV, copyJSON, resetLog, participants = [], clearRoster, onPublishPosts
 }) {
   const [editing, setEditing] = useState(null); // post object or null
   const [isNew, setIsNew] = useState(false);
@@ -920,18 +977,21 @@ function AdminDashboard({
               <button className="btn" onClick={copyJSON} disabled={!participants.length}>Copy JSON</button>
               <button className="btn" onClick={clearRoster} disabled={!participants.length}>Clear Roster</button>
               {/* 🔧 Debugging helper: test sending to Google Sheet */}
-    <button
-      className="btn"
-      onClick={async () => {
-        const testRow = { session_id: "ui-test-" + uid(), participant_id: "demo" };
-        const testEvents = [{ action: "ping", at: Date.now() }];
-        const ok = await sendToSheet(testRow, testEvents);
-        console.log("Manual test send ->", ok);
-        alert(ok ? "Apps Script received the test row." : "Send failed");
-      }}
-    >
-      Test Google Sheet logging
-    </button>
+              <button
+  className="btn"
+  onClick={async () => {
+    const testRow = { session_id: "ui-test-" + uid(), participant_id: "demo" };
+    const testEvents = [{ action: "ping", at: Date.now() }];
+    const header = buildMinimalHeader(posts);
+    const ok = await sendToSheet(header, testRow, testEvents);
+    console.log("Manual test send ->", ok);
+    alert(ok ? "Apps Script received the test row." : "Send failed");
+  }}
+>
+  Test Google Sheet logging
+</button>
+
+    
             </div>
           </div>
 
@@ -952,10 +1012,15 @@ function AdminDashboard({
         </div>
 
         {/* Posts list */}
-        <div style={{ marginTop: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: ".5rem", flexWrap: "wrap" }}>
-          <h4 style={{ margin: 0 }}>Posts ({posts.length})</h4>
-          <button className="btn" onClick={openNew}>+ Add Post</button>
-        </div>
+<div className="admin-toolbar">
+  <h4 className="admin-title">Posts ({posts.length})</h4>
+  <div className="admin-actions">
+    <button className="btn ghost" onClick={openNew}>+ Add Post</button>
+    <button className="btn primary" onClick={() => onPublishPosts(posts)}>
+      Save Feed
+    </button>
+  </div>
+</div>
 
         <div style={{ marginTop: ".5rem", display: "grid", gap: ".75rem" }}>
           {posts.map((p) => {
@@ -969,12 +1034,14 @@ function AdminDashboard({
                     <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {p.author} {p.badge && <span className="badge" style={{ marginLeft: ".25rem" }}><IconBadge /></span>}
                     </div>
-                    <div className="meta">{p.time} · {p.interventionType === "label" ? "Label" : p.interventionType === "note" ? "Note" : "No intervention"}</div>
+                    <div className="meta">
+  {p.time} · {p.interventionType === "label" ? "Label" : p.interventionType === "note" ? "Note" : "No intervention"} · <span style={{ fontFamily: "monospace" }}>{p.id}</span>
+</div>
                   </div>
                   <div style={{ display: "flex", gap: ".5rem" }}>
-                    <button className="btn" onClick={() => openEdit(p)}>Edit</button>
-                    <button className="btn" onClick={() => removePost(p.id)}>Delete</button>
-                  </div>
+  <button className="btn ghost" onClick={() => openEdit(p)}>Edit</button>
+  <button className="btn ghost danger" onClick={() => removePost(p.id)}>Delete</button>
+</div>
                 </div>
                 <div style={{ marginTop: ".5rem", color: "#374151" }}>
                   {p.text.slice(0, 140)}{p.text.length > 140 ? "…" : ""}
@@ -1340,12 +1407,29 @@ export default function App() {
   const [submitted, setSubmitted] = useState(false);
   const [adminAuthed, setAdminAuthed] = useState(false);
 
-  // Posts (persisted)
-  const [posts, setPosts] = useState(() => {
-    const saved = localStorage.getItem("fakebook_posts");
-    if (saved) { try { return JSON.parse(saved); } catch {} }
-    return SEEDED_POSTS;
-  });
+// Posts (prefer backend, fall back to local)
+const [posts, setPosts] = useState(SEEDED_POSTS);
+const [loadingPosts, setLoadingPosts] = useState(true);
+
+useEffect(() => {
+  let mounted = true;
+  (async () => {
+    // try remote first
+    const remote = await loadPostsFromBackend();
+    if (mounted) {
+      if (remote) {
+        setPosts(remote);
+        localStorage.setItem("fakebook_posts", JSON.stringify(remote));
+      } else {
+        // fall back to any local saved copy (if present)
+        const saved = localStorage.getItem("fakebook_posts");
+        if (saved) { try { setPosts(JSON.parse(saved)); } catch {} }
+      }
+      setLoadingPosts(false);
+    }
+  })();
+  return () => { mounted = false; };
+}, []);
 
   const [disabled, setDisabled] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1468,6 +1552,7 @@ export default function App() {
   }, [orderedPosts]);
 
 // compact header that works across any number of posts
+// compact header that works across any number of posts
 function buildMinimalHeader(posts) {
   const base = [
     "session_id",
@@ -1477,18 +1562,20 @@ function buildMinimalHeader(posts) {
     "ms_enter_to_submit",
     "ms_enter_to_last_interaction"
   ];
+
   const perPost = [];
-  posts.forEach((p, idx) => {
-    const k = `p${idx+1}`;
+  posts.forEach((p) => {
+    const id = p.id || "unknown";
     perPost.push(
-      `${k}_reacted`,
-      `${k}_reactions`,             // comma-separated unique
-      `${k}_commented`,
-      `${k}_comment_texts`,         // join with " | "
-      `${k}_shared`,
-      `${k}_reported_misinfo`
+      `${id}_reacted`,
+      `${id}_reactions`,        // comma-separated
+      `${id}_commented`,
+      `${id}_comment_texts`,    // join with " | "
+      `${id}_shared`,
+      `${id}_reported_misinfo`
     );
   });
+
   return [...base, ...perPost];
 }
 
@@ -1528,28 +1615,25 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
         : ""
   };
 
-  posts.forEach((p, idx) => {
-    const k = `p${idx+1}`;
+  posts.forEach((p) => {
+    const id = p.id || "unknown";
     const postEvents = events.filter(e => e.post_id === p.id);
-
+  
     const reactedTypes = new Set(
       postEvents.filter(e => e.action === "react_pick")
-                .map(e => e.type || e.meta?.type || e?.label || e?.reaction || e?.emoji)
+                .map(e => e.type)
                 .filter(Boolean)
     );
     const commentedTexts = postEvents
       .filter(e => e.action === "comment_submit")
       .map(e => (e.text || "").trim()).filter(Boolean);
-
-    const shared   = postEvents.some(e => e.action === "share");
-    const reported = postEvents.some(e => e.action === "report_misinformation_click");
-
-    row[`${k}_reacted`]          = reactedTypes.size > 0 ? "1" : "0";
-    row[`${k}_reactions`]        = Array.from(reactedTypes).join(",");
-    row[`${k}_commented`]        = commentedTexts.length > 0 ? "1" : "0";
-    row[`${k}_comment_texts`]    = commentedTexts.join(" | ");
-    row[`${k}_shared`]           = shared ? "1" : "0";
-    row[`${k}_reported_misinfo`] = reported ? "1" : "0";
+  
+    row[`${id}_reacted`]          = reactedTypes.size > 0 ? "1" : "0";
+    row[`${id}_reactions`]        = Array.from(reactedTypes).join(",");
+    row[`${id}_commented`]        = commentedTexts.length > 0 ? "1" : "0";
+    row[`${id}_comment_texts`]    = commentedTexts.join(" | ");
+    row[`${id}_shared`]           = postEvents.some(e => e.action === "share") ? "1" : "0";
+    row[`${id}_reported_misinfo`] = postEvents.some(e => e.action === "report_misinformation_click") ? "1" : "0";
   });
 
   return row;
@@ -1614,9 +1698,10 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
         setParticipants(storage.loadParticipants());
       
         // 5) fire remote send ONCE
-        console.debug("Submitting row to sheet:", row);
-        const ok = await sendToSheet(row, eventsWithSubmit);
-        console.debug("sendToSheet returned:", ok);
+const header = buildMinimalHeader(posts);   // ⬅️ add this line
+console.debug("Submitting row to sheet:", row);
+const ok = await sendToSheet(header, row, eventsWithSubmit); // ⬅️ include header
+console.debug("sendToSheet returned:", ok);
       
         if (ok) {
           setSubmitted(true);               // ✅ show Thank You only after send fired
@@ -1632,40 +1717,73 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
     />
   }
 />
-          <Route
-            path="/admin"
-            element={
-              adminAuthed ? (
-                <AdminDashboard
-                  posts={posts} setPosts={setPosts}
-                  randomize={randomize} setRandomize={setRandomize}
-                  showComposer={showComposer} setShowComposer={setShowComposer}
-                  participants={participants}
-                  downloadCSV={() => {
-                    const header = buildMinimalHeader(posts);
-                    const csv = toCSV(participants, header);
-                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `fakebook_participants.csv`;
-                    document.body.appendChild(a); a.click(); a.remove();
-                    URL.revokeObjectURL(url);
-                  }}
-                  copyJSON={async () => {
-                    try {
-                      await navigator.clipboard.writeText(JSON.stringify(participants, null, 2));
-                      showToast("JSON copied");
-                    } catch { showToast("Copy failed"); }
-                  }}
-                  resetLog={() => { setEvents([]); dwell.current = new Map(); showToast("Event log cleared"); }}
-                  clearRoster={clearRoster}
-                />
-              ) : (
-                <AdminLogin onAuth={() => setAdminAuthed(true)} />
-              )
-            }
-          />
+<Route
+  path="/admin"
+  element={
+    adminAuthed ? (
+      <AdminDashboard
+        posts={posts}
+        setPosts={setPosts}
+        randomize={randomize}
+        setRandomize={setRandomize}
+        showComposer={showComposer}
+        setShowComposer={setShowComposer}
+        participants={participants}
+        downloadCSV={() => {
+          const header = buildMinimalHeader(posts);
+          const csv = toCSV(participants, header);
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `fakebook_participants.csv`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }}
+        copyJSON={async () => {
+          try {
+            await navigator.clipboard.writeText(
+              JSON.stringify(participants, null, 2)
+            );
+            showToast("JSON copied");
+          } catch {
+            showToast("Copy failed");
+          }
+        }}
+        resetLog={() => {
+          setEvents([]);
+          dwell.current = new Map();
+          showToast("Event log cleared");
+        }}
+        clearRoster={clearRoster}
+
+        
+
+        // ⬇️ NEW PROP
+onPublishPosts={async (nextPosts) => {
+  try {
+    const ok = await savePostsToBackend(nextPosts);
+    if (ok) {
+      // persist locally so everyone on this browser sees the updated feed immediately
+      setPosts(nextPosts);
+      localStorage.setItem("fakebook_posts", JSON.stringify(nextPosts));
+      showToast("Feed published to Sheet");
+    } else {
+      showToast("Publish failed");
+    }
+  } catch (err) {
+    console.error("Publish error:", err);
+    showToast("Publish failed");
+  }
+}}
+      />
+    ) : (
+      <AdminLogin onAuth={() => setAdminAuthed(true)} />
+    )
+  }
+/>
         </Routes>
         {toast && <div className="toast">{toast}</div>}
       </div>
