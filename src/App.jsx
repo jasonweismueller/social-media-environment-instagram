@@ -88,19 +88,22 @@ const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePs
 const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // MUST match TOKEN in Code.gs
 
 async function sendToSheet(row, events) {
+  const payload = JSON.stringify({ token: GS_TOKEN, row, events });
+
+  // Send as a "simple request" to avoid CORS preflight (no custom headers, text/plain)
+  // Use no-cors so the browser won't block; we can't read the response, but the server receives it.
   try {
-    const res = await fetch(GS_ENDPOINT, {
+    await fetch(GS_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      mode: "cors",
-      body: JSON.stringify({ token: GS_TOKEN, row, events }),
+      mode: "no-cors",
+      // do NOT set application/json; that triggers preflight
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: payload,
+      keepalive: true, // helps when user immediately closes tab
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) throw new Error("Apps Script returned not ok");
-    console.debug("✅ Logged to Google Sheet");
-    return true;
+    return true; // assume success (opaque response by design)
   } catch (err) {
-    console.warn("⚠️ Failed to log to Google Sheet:", err);
+    console.warn("sendToSheet failed:", err);
     return false;
   }
 }
