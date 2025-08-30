@@ -88,29 +88,28 @@ const GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePs
 const GS_TOKEN    = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427"; // must match Code.gs
 
 async function sendToSheet(row, events) {
-  const text = JSON.stringify({ token: GS_TOKEN, row, events });
+  const payload = JSON.stringify({ token: GS_TOKEN, row, events });
+  const blob = new Blob([payload], { type: "text/plain;charset=UTF-8" });
 
-  // 1) Try beacon (fire-and-forget, survives tab close)
+  // 1) Try beacon (best for “thank you” overlays / tab closes)
   if (navigator.sendBeacon) {
-    const ok = navigator.sendBeacon(
-      GS_ENDPOINT,
-      new Blob([text], { type: "text/plain;charset=UTF-8" })
-    );
-    return ok; // boolean
+    const ok = navigator.sendBeacon(GS_ENDPOINT, blob);
+    console.debug("sendBeacon ->", ok);
+    return ok; // true/false
   }
 
-  // 2) Fallback: simple request (no preflight)
+  // 2) Fallback: no-cors fetch (opaque response; assume success if no throw)
   try {
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors", // opaque, but delivered
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body: text,
-      keepalive: true,
+      mode: "no-cors",
+      body: blob,
+      keepalive: true
     });
+    console.debug("fetch(no-cors) fired");
     return true;
   } catch (err) {
-    console.warn("sendToSheet failed:", err);
+    console.warn("fetch(no-cors) failed:", err);
     return false;
   }
 }
@@ -909,6 +908,7 @@ function AdminDashboard({
       <div className="card" style={{ padding: "1rem" }}>
         <h3 style={{ marginTop: 0 }}>Admin Controls</h3>
 
+
         {/* Participants roster */}
           <div className="card" style={{ padding: "1rem", marginTop: ".75rem" }}>
             <h4 style={{ marginTop: 0 }}>Participants ({participants.length})</h4>
@@ -919,6 +919,19 @@ function AdminDashboard({
               <button className="btn" onClick={downloadCSV} disabled={!participants.length}>Download CSV</button>
               <button className="btn" onClick={copyJSON} disabled={!participants.length}>Copy JSON</button>
               <button className="btn" onClick={clearRoster} disabled={!participants.length}>Clear Roster</button>
+              {/* 🔧 Debugging helper: test sending to Google Sheet */}
+    <button
+      className="btn"
+      onClick={async () => {
+        const testRow = { session_id: "ui-test-" + uid(), participant_id: "demo" };
+        const testEvents = [{ action: "ping", at: Date.now() }];
+        const ok = await sendToSheet(testRow, testEvents);
+        console.log("Manual test send ->", ok);
+        alert(ok ? "Apps Script received the test row." : "Send failed");
+      }}
+    >
+      Test Google Sheet logging
+    </button>
             </div>
           </div>
 
@@ -1568,16 +1581,16 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
       log={log}
       showComposer={showComposer}
       onSubmit={async () => {
-        if (submitted || disabled) return;
+        if (submitted || disabled) return;      // guard double-clicks
         setDisabled(true);
       
         const ts = now();
         submitTsRef.current = ts;
       
-        // record submit into your in-memory log
+        // 1) record submit locally (keeps in-memory timeline consistent)
         log("feed_submit");
       
-        // build an events array that definitely includes the submit
+        // 2) build a list that DEFINITELY includes the submit event
         const submitEvent = {
           session_id: sessionIdRef.current,
           participant_id: participantId || null,
@@ -1588,7 +1601,7 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
         };
         const eventsWithSubmit = [...events, submitEvent];
       
-        // compute participant row
+        // 3) compute participant row
         const row = buildParticipantRow({
           session_id: sessionIdRef.current,
           participant_id: participantId,
@@ -1596,18 +1609,22 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
           posts,
         });
       
-        // always save locally (so you never lose data)
+        // 4) persist locally (always)
         storage.upsertParticipantRow(row);
         setParticipants(storage.loadParticipants());
       
-        // try to send to Google Sheet
+        // 5) fire remote send ONCE
+        console.debug("Submitting row to sheet:", row);
         const ok = await sendToSheet(row, eventsWithSubmit);
+        console.debug("sendToSheet returned:", ok);
       
         if (ok) {
-          setSubmitted(true);
+          setSubmitted(true);               // ✅ show Thank You only after send fired
           showToast("Submitted ✔︎");
         } else {
           showToast("Saved locally. Sync failed.");
+          // (optional) keep the feed visible so they can retry, or still thank them:
+          // setSubmitted(true);
         }
       
         setDisabled(false);
