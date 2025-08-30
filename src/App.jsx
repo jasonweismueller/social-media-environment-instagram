@@ -1590,8 +1590,20 @@ function buildParticipantRow({ session_id, participant_id, events, posts }) {
         storage.upsertParticipantRow(row);
         setParticipants(storage.loadParticipants());
 
-        // 5) reflect UI state immediately
-        setSubmitted(true);
+        // 5) send first, then show Thank You on success
+        try {
+          const ok = await sendToSheet(row, eventsWithSubmit);
+          if (ok) {
+            setSubmitted(true);
+            showToast("Submitted ✔︎");
+          } else {
+            showToast("Saved locally. Sync failed.");
+          }
+        } catch {
+          showToast("Saved locally. Sync failed.");
+        } finally {
+          setDisabled(false);
+        }
 
         // 6) try to send to Google Sheet (best-effort)
         try {
