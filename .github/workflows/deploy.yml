@@ -1,9 +1,9 @@
-cat > .github/workflows/deploy.yml <<'YAML'
-name: Deploy Vite site to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]   # or "master", whichever branch you use
+    branches:
+      - main   # change if your default branch is "master"
   workflow_dispatch:
 
 permissions:
@@ -28,10 +28,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install
+      - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build project
         run: npm run build
 
       - name: Upload artifact
@@ -44,9 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-YAML
