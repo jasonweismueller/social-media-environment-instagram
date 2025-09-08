@@ -11,10 +11,12 @@ import {
   hasAdminSession, adminLogout,
 } from "./utils";
 
+// ⬇️ updated imports to use the split files
+import { Feed } from "./components-ui-posts";
 import {
-  Feed, ParticipantOverlay, ThankYouOverlay,
+  ParticipantOverlay, ThankYouOverlay,
   RouteAwareTopbar, SkeletonFeed, LoadingOverlay,
-} from "./components-ui";
+} from "./components-ui-core";
 
 import { AdminDashboard } from "./components-admin-core";
 import AdminLogin from "./components-admin-login";
