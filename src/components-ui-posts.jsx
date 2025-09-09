@@ -103,6 +103,17 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const hasRx = respectShowReactions ? (showReactions && totalReactions > 0) : (totalReactions > 0);
 
   const click = (action, meta = {}) => { if (!disabled) onAction(action, { post_id: post.id, ...meta }); };
+  const postForCounts = useMemo(() => ({
+    ...post,
+    showReactions: true, // unblock tooltips
+    metrics: {
+      ...post.metrics,
+      comments: displayedCommentCount,
+      shares: displayedShareCount,
+      // if NamesPeek checks a reactions total in metrics, keep it in sync too:
+      reactions: totalReactions
+    }
+  }), [post, displayedCommentCount, displayedShareCount, totalReactions]);
 
   const onLike = () => {
     setMyReaction(prev => {
@@ -665,7 +676,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                     />
                   ))}
                   <span className="muted rx-count" style={{ marginLeft: 8 }}>
-                    <NamesPeek post={post} count={totalReactions} kind="reactions" label="reactions" hideInlineLabel />
+                  <NamesPeek post={postForCounts} count={totalReactions} kind="reactions" label="reactions" hideInlineLabel />
                   </span>
                 </div>
               </div>
@@ -673,11 +684,11 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
             {(hasComments || hasShares) && (
               <div className="right muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {hasComments && (<NamesPeek post={post} count={displayedCommentCount} kind="comments" label={displayedCommentCount === 1 ? "comment" : "comments"} />)}
+                {hasComments && (<NamesPeek post={postForCounts} count={displayedCommentCount} kind="comments" label={displayedCommentCount === 1 ? "comment" : "comments"} />)}
                 {hasComments && hasShares && <span aria-hidden="true">·</span>}
                 {hasShares && (
                   <NamesPeek
-                    post={post}
+                    post={postForCounts}
                     count={displayedShareCount}
                     kind="shares"
                     label={displayedShareCount === 1 ? "share" : "shares"}
