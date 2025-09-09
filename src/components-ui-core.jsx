@@ -1,6 +1,7 @@
 // components-ui-core.jsx
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
 
 /* ------------------------------- Icons ------------------------------------ */
 export const IconLike = (p) => (
@@ -233,9 +234,15 @@ export function Modal({ title, children, onClose, wide = false, footer = null })
 /* ------------------------- Hover peek for names ---------------------------- */
 export function NamesPeek({ post, count = 0, kind, label, hideInlineLabel = false }) {
   const [open, setOpen] = React.useState(false);
-  const { names, remaining } = (window.fakeNamesFor
-    ? window.fakeNamesFor(post.id, count, kind, 4)
-    : { names: [], remaining: 0 });
+
+  // Prefer the real util; fall back to a global shim only if someone injected it.
+  const fn =
+    utilsFakeNamesFor ||
+    (typeof window !== "undefined" ? window.fakeNamesFor : null);
+
+  const { names, remaining } = fn
+    ? fn(post.id, count, kind, 4)
+    : { names: [], remaining: 0 };
 
   return (
     <span
@@ -269,7 +276,7 @@ export function NamesPeek({ post, count = 0, kind, label, hideInlineLabel = fals
           <div style={{ fontWeight: 600, marginBottom: 6 }}>
             {(label || "").slice(0,1).toUpperCase() + (label || "").slice(1)}
           </div>
-          {names?.length ? (
+          {names.length ? (
             <>
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {names.map((n) => (<li key={n} style={{ margin: "2px 0" }}>{n}</li>))}

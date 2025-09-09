@@ -12,22 +12,22 @@ import {
 
 /* --- In-view autoplay hook --- */
 function useInViewAutoplay(threshold = 0.6) {
-    const wrapRef = React.useRef(null);
-    const [inView, setInView] = React.useState(false);
-  
-    React.useEffect(() => {
-      if (!wrapRef.current) return;
-      const el = wrapRef.current;
-      const obs = new IntersectionObserver(
-        ([e]) => setInView(!!(e?.isIntersecting && e.intersectionRatio >= threshold)),
-        { root: null, threshold: [0, threshold, 1] }
-      );
-      obs.observe(el);
-      return () => obs.disconnect();
-    }, [threshold]);
-  
-    return { wrapRef, inView };
-  }
+  const wrapRef = React.useRef(null);
+  const [inView, setInView] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!wrapRef.current) return;
+    const el = wrapRef.current;
+    const obs = new IntersectionObserver(
+      ([e]) => setInView(!!(e?.isIntersecting && e.intersectionRatio >= threshold)),
+      { root: null, threshold: [0, threshold, 1] }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+
+  return { wrapRef, inView };
+}
 
 /* ----------------------------- Post Card ---------------------------------- */
 export function PostCard({ post, onAction, disabled, registerViewRef, respectShowReactions = false }) {
@@ -35,8 +35,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [expanded, setExpanded] = useState(false);
   const [showComment, setShowComment] = useState(false);
   const [commentText, setCommentText] = useState("");
-
-  
 
   // Participant comment (this session)
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
@@ -103,16 +101,19 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const hasRx = respectShowReactions ? (showReactions && totalReactions > 0) : (totalReactions > 0);
 
   const click = (action, meta = {}) => { if (!disabled) onAction(action, { post_id: post.id, ...meta }); };
+
+  // 👇 Provide NamesPeek with a version of the post that always:
+  // - has showReactions=true (unblocks internal gates),
+  // - contains the *displayed* counts so names match what the user sees.
   const postForCounts = useMemo(() => ({
     ...post,
-    showReactions: true, // unblock tooltips
+    showReactions: true,
     metrics: {
       ...post.metrics,
       comments: displayedCommentCount,
       shares: displayedShareCount,
-      // if NamesPeek checks a reactions total in metrics, keep it in sync too:
-      reactions: totalReactions
-    }
+      reactions: totalReactions,
+    },
   }), [post, displayedCommentCount, displayedShareCount, totalReactions]);
 
   const onLike = () => {
@@ -301,7 +302,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
             {post.badge && <span className="badge"><IconBadge /></span>}
           </div>
 
-          {/* Sponsored for ads; otherwise time + globe */}
+        {/* Sponsored for ads; otherwise time + globe */}
           <div className="meta" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             {post.adType === "ad" ? (
               <>
@@ -566,10 +567,8 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
         </button>
       ) : null}
 
-      {/* Ensure programmatic play/pause on inView change for native <video> */}
-      {/*
-        This effect is placed after the video markup so refs are set.
-      */}
+      {/* Ensure programmatic in-view play/pause on inView change for native <video> */}
+      {/* This effect is placed after the video markup so refs are set. */}
       <InViewVideoController inView={inView} videoRef={videoRef} setIsVideoPlaying={setIsVideoPlaying} muted={isMuted} />
 
       {/* Ad card */}
@@ -676,7 +675,8 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                     />
                   ))}
                   <span className="muted rx-count" style={{ marginLeft: 8 }}>
-                  <NamesPeek post={postForCounts} count={totalReactions} kind="reactions" label="reactions" hideInlineLabel />
+                    {/* Use postForCounts so NamesPeek sees correct counts & showReactions=true */}
+                    <NamesPeek post={postForCounts} count={totalReactions} kind="reactions" label="reactions" hideInlineLabel />
                   </span>
                 </div>
               </div>
@@ -684,7 +684,14 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
             {(hasComments || hasShares) && (
               <div className="right muted" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {hasComments && (<NamesPeek post={postForCounts} count={displayedCommentCount} kind="comments" label={displayedCommentCount === 1 ? "comment" : "comments"} />)}
+                {hasComments && (
+                  <NamesPeek
+                    post={postForCounts}
+                    count={displayedCommentCount}
+                    kind="comments"
+                    label={displayedCommentCount === 1 ? "comment" : "comments"}
+                  />
+                )}
                 {hasComments && hasShares && <span aria-hidden="true">·</span>}
                 {hasShares && (
                   <NamesPeek
