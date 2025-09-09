@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fakebook</title>
+    <title>Social Media Environment</title>
+    <!-- Define CONFIG before the app loads -->
+    <script>
+      window.CONFIG = {
+        API_BASE: "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec"
+      };
+      window.SIGNER_BASE = "http://localhost:4000";
+    </script>
   </head>
   <body>
     <div id="root"></div>

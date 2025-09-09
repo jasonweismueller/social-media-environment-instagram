@@ -127,11 +127,9 @@ export function fakeNamesFor(postId, a, b, maxShow = 5) {
 }
 
 /**
- * Legacy helper for existing UI: returns an array of up to maxShow names,
- * and appends the final `"and X more"` item if needed, so you can do join(", ").
+ * Legacy helper… (returns names list w/ “and X more”)
  */
 export function fakeNamesList(postId, kindOrCount, countMaybe, maxShow = 5) {
-  // Support both call orders
   let kind = "comments";
   let count = 0;
   if (typeof kindOrCount === "string") {
@@ -147,11 +145,9 @@ export function fakeNamesList(postId, kindOrCount, countMaybe, maxShow = 5) {
   return names;
 }
 
-
 // utils.js (add)
 export function neutralAvatarDataUrl(seed = "") {
   const s = String(seed || "");
-  // deterministic-ish colors
   const palette = ["#0ea5e9","#22c55e","#a855f7","#f59e0b","#ef4444","#06b6d4","#84cc16","#6366f1"];
   let h = 0; for (let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i))|0;
   const bg = palette[Math.abs(h) % palette.length];
@@ -165,7 +161,6 @@ export function neutralAvatarDataUrl(seed = "") {
     </linearGradient>
   </defs>
   <circle cx="32" cy="32" r="32" fill="url(#g)"/>
-  <!-- neutral, genderless bust -->
   <circle cx="32" cy="26.5" r="10" fill="#f3f4f6"/>
   <path d="M16 54c3-10 10-15 16-15s13 5 16 15" fill="#e5e7eb"/>
 </svg>`;
@@ -213,7 +208,7 @@ async function getJsonWithRetry(url, opts = {}, { retries = 1, timeoutMs = 8000 
 
 /* --------------------- Admin auth (session token) ------------------------- */
 const ADMIN_TOKEN_KEY = "fb_admin_token_v1";
-const ADMIN_TOKEN_EXP_KEY = "fb_admin_token_exp_v1"; // ms epoch when token expires
+const ADMIN_TOKEN_EXP_KEY = "fb_admin_token_exp_v1";
 
 function setAdminToken(token, ttlSec) {
   try {
@@ -236,7 +231,6 @@ export function getAdminToken() {
     const exp = Number(localStorage.getItem(ADMIN_TOKEN_EXP_KEY) || "");
     if (!t || !t.trim()) return null;
     if (exp && Date.now() > exp) {
-      // expired — purge
       localStorage.removeItem(ADMIN_TOKEN_KEY);
       localStorage.removeItem(ADMIN_TOKEN_EXP_KEY);
       return null;
@@ -247,7 +241,6 @@ export function getAdminToken() {
 export function hasAdminSession() { return !!getAdminToken(); }
 export function clearAdminToken() { setAdminToken(""); }
 
-/** POST {action:'admin_login', password} -> {ok, admin_token, ttl_sec} */
 export async function adminLogin(password) {
   try {
     const res = await fetch(GS_ENDPOINT, {
@@ -262,7 +255,6 @@ export async function adminLogin(password) {
     }
     const data = await res.json().catch(() => ({}));
     if (data && data.ok && data.admin_token) {
-      // store token + TTL if provided
       setAdminToken(data.admin_token, data.ttl_s || data.ttl_sec || null);
       return { ok: true, admin_token: data.admin_token, ttl_s: data.ttl_s || data.ttl_sec || null };
     }
@@ -272,7 +264,6 @@ export async function adminLogin(password) {
   }
 }
 
-/** POST {action:'admin_logout', admin_token} (best-effort, no-cors) */
 export async function adminLogout() {
   const admin_token = getAdminToken();
   clearAdminToken();
@@ -280,7 +271,7 @@ export async function adminLogout() {
   try {
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",                                  // ← avoid CORS
+      mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({ action: "admin_logout", admin_token }),
       keepalive: true,
@@ -290,9 +281,6 @@ export async function adminLogout() {
 }
 
 /* --------------------- Logging participants & events ---------------------- */
-/**
- * NOTE: backend requires feed_id top-level in the payload.
- */
 export async function sendToSheet(header, row, events, feed_id) {
   if (!feed_id) { console.warn("sendToSheet: feed_id required"); return false; }
   const payload = { token: GS_TOKEN, action: "log_participant", feed_id, header, row, events };
@@ -303,13 +291,12 @@ export async function sendToSheet(header, row, events, feed_id) {
   }
   try {
     await fetch(GS_ENDPOINT, { method: "POST", mode: "no-cors", body: blob, keepalive: true });
-    return true; // opaque, assume success
+    return true;
   } catch (err) {
     console.warn("sendToSheet failed:", err);
     return false;
   }
 }
-
 
 /* --------------------- Feeds listing (Admin switcher) --------------------- */
 export async function listFeedsFromBackend() {
@@ -319,7 +306,6 @@ export async function listFeedsFromBackend() {
       { method: "GET", mode: "cors", cache: "no-store" },
       { retries: 1, timeoutMs: 8000 }
     );
-    // Expected: [{ feed_id, name, checksum, updated_at }, ...]
     return Array.isArray(data) ? data : [];
   } catch (e) {
     console.warn("listFeedsFromBackend failed:", e);
@@ -346,10 +332,9 @@ export async function setDefaultFeedOnBackend(feedId) {
   const admin_token = getAdminToken();
   if (!admin_token) { console.warn("setDefaultFeedOnBackend: missing admin_token"); return false; }
   try {
-    // no-cors to avoid CORS problems; assume success if no network error
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",                                  // ← avoid CORS
+      mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({
         action: "set_default_feed",
@@ -366,14 +351,16 @@ export async function setDefaultFeedOnBackend(feedId) {
 }
 
 export async function deleteFeedOnBackend(feedId) {
+  const admin_token = getAdminToken();
+  if (!admin_token) return false;
   try {
     const res = await fetch(GS_ENDPOINT, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: getAdminToken(),
         action: "delete_feed",
+        admin_token,
         feed_id: feedId,
       }),
     });
@@ -384,8 +371,47 @@ export async function deleteFeedOnBackend(feedId) {
   }
 }
 
+/* ------------------------- Video preload helpers -------------------------- */
+const DRIVE_RE = /(?:^|\/\/)(?:drive\.google\.com|drive\.usercontent\.google\.com)/i;
+const __videoPreloadSet = new Set();
+
+/** Add a <link rel="preload" as="video"> to speed up first play (non-Drive only). */
+export function injectVideoPreload(url, mime = "video/mp4") {
+  if (!url || DRIVE_RE.test(url)) return;
+  if (__videoPreloadSet.has(url)) return;
+
+  const exists = Array.from(document.querySelectorAll('link[rel="preload"][as="video"]'))
+    .some(l => l.href === url);
+  if (exists) { __videoPreloadSet.add(url); return; }
+
+  const link = document.createElement("link");
+  link.rel = "preload";
+  link.as = "video";
+  link.href = url;
+  link.crossOrigin = "anonymous";
+  if (mime) link.type = mime;
+  document.head.appendChild(link);
+  __videoPreloadSet.add(url);
+}
+
+/** Create a hidden <video> to warm the cache (non-Drive only). */
+export function primeVideoCache(url) {
+  if (!url || DRIVE_RE.test(url)) return;
+  if (__videoPreloadSet.has(`prime:${url}`)) return;
+
+  const v = document.createElement("video");
+  v.src = url;
+  v.preload = "auto";
+  v.muted = true;
+  v.playsInline = true;
+  v.crossOrigin = "anonymous";
+  try { v.load(); } catch {}
+  __videoPreloadSet.add(`prime:${url}`);
+
+  setTimeout(() => { try { v.src = ""; } catch {} }, 30000);
+}
+
 /* ------------------------- POSTS API (multi-feed + cache) ----------------- */
-// Per-tab, in-memory cache, **keyed by feedId** (null = default feed as resolved).
 const __postsCache = new Map(); // key: feedId|null -> { at, data }
 const POSTS_STALE_MS = 60_000;
 
@@ -406,9 +432,11 @@ export function invalidatePostsCache(feedId = null) {
 
 /**
  * loadPostsFromBackend(feedId?, opts?)
- *  - loadPostsFromBackend("feed_a")                  // specific feed (cached)
- *  - loadPostsFromBackend("feed_a", { force: true }) // bypass cache for that feed
- *  - loadPostsFromBackend({ force: true })           // legacy / no feedId — will use backend default
+ *  - loadPostsFromBackend("feed_a")
+ *  - loadPostsFromBackend("feed_a", { force: true })
+ *  - loadPostsFromBackend({ force: true })
+ *
+ * Now also preloads streamable video URLs (non-Drive) for faster playback.
  */
 export async function loadPostsFromBackend(arg1, arg2) {
   let feedId = null;
@@ -421,7 +449,6 @@ export async function loadPostsFromBackend(arg1, arg2) {
     force = !!arg1.force;
   }
 
-  // If no feedId provided, fetch backend's default feed id
   if (!feedId) {
     feedId = await getDefaultFeedFromBackend();
   }
@@ -443,6 +470,15 @@ export async function loadPostsFromBackend(arg1, arg2) {
       { retries: 1, timeoutMs: 8000 }
     );
     const arr = Array.isArray(data) ? data : [];
+
+    // Preload streamable video URLs (skip Drive/iframe)
+    arr
+      .filter(p => p?.videoMode !== "none" && p?.video?.url && !DRIVE_RE.test(p.video.url))
+      .forEach(p => {
+        injectVideoPreload(p.video.url, p.video?.mime || "video/mp4");
+        primeVideoCache(p.video.url);
+      });
+
     __setCachedPosts(feedId, arr);
     return arr;
   } catch (e) {
@@ -454,18 +490,15 @@ export async function loadPostsFromBackend(arg1, arg2) {
 
 /**
  * savePostsToBackend(posts, { feedId, name } = {})
- *  - feedId: string identifier for the feed collection (e.g., "control")
- *  - name:   human label shown in admin (optional; backend can store it)
  */
 export async function savePostsToBackend(posts, ctx = {}) {
   const { feedId = null, name = null } = ctx || {};
   const admin_token = getAdminToken();
   if (!admin_token) { console.warn("savePostsToBackend: missing admin_token"); return false; }
   try {
-    // no-cors to avoid CORS problems; assume success if no network error
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",                                  // ← avoid CORS
+      mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({
         action: "publish_posts",
@@ -514,15 +547,73 @@ export function fileToDataURL(file) {
   });
 }
 
+// utils.js
+
+/**
+ * Upload a File/Blob to S3 using your local signer (AWS SDK v2).
+ * Returns the public file URL to save on the post (post.video.url).
+ *
+ * @param {File|Blob|string} fileOrDataUrl  - File, Blob, or dataURL string
+ * @param {string} filename                  - desired filename (e.g., "clip.mp4")
+ * @param {string} mime                      - e.g., "video/mp4"
+ * @param {string} signerBase                - e.g., "http://localhost:4000"
+ */
+export async function uploadVideoToBackend(fileOrDataUrl, filename, mime = "video/mp4", signerBase = "http://localhost:4000") {
+  // 1) Normalize to a Blob
+  let blob;
+  if (typeof fileOrDataUrl === "string" && fileOrDataUrl.startsWith("data:")) {
+    const base64 = fileOrDataUrl.split(",")[1] || "";
+    const binStr = atob(base64);
+    const len = binStr.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binStr.charCodeAt(i);
+    blob = new Blob([bytes], { type: mime });
+  } else if (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob) {
+    blob = fileOrDataUrl;
+    mime = blob.type || mime;
+    if (!filename && fileOrDataUrl instanceof File) filename = fileOrDataUrl.name;
+  } else {
+    throw new Error("uploadVideoToBackend: expected File/Blob or dataURL");
+  }
+
+  // 2) Ask your signer for a presigned PUT URL
+  const q = new URLSearchParams({
+    filename: filename || `video-${Date.now()}.mp4`,
+    type: mime || "video/mp4",
+  });
+  const signRes = await fetch(`${signerBase}/sign-upload?${q.toString()}`);
+  if (!signRes.ok) {
+    const txt = await signRes.text().catch(() => "");
+    throw new Error(`Signer failed: HTTP ${signRes.status} ${txt}`);
+  }
+  const { uploadUrl, fileUrl, error } = await signRes.json();
+  if (!uploadUrl || !fileUrl || error) {
+    throw new Error(error || "Signer did not return uploadUrl/fileUrl");
+  }
+
+  // 3) PUT the file directly to S3
+  const putRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": mime },
+    body: blob,
+  });
+  if (!putRes.ok) {
+    const txt = await putRes.text().catch(() => "");
+    throw new Error(`S3 PUT failed: HTTP ${putRes.status} ${txt}`);
+  }
+
+  // 4) Return the public URL (ensure your bucket policy/CORS are set for reads)
+  return fileUrl;
+}
+
 /* --------------------------- Feed ID helper -------------------------------- */
 export function computeFeedId(posts = []) {
-  // Deterministic lightweight hash over stable post properties
   const src = posts.map(p =>
     `${p.id}|${(p.text || '').length}|${p.imageMode || ''}|${p.interventionType || ''}`
   ).join('~');
   let h = 0;
   for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) | 0;
-  return 'feed_' + (h >>> 0).toString(36); // unsigned -> base36
+  return 'feed_' + (h >>> 0).toString(36);
 }
 
 /* -------- participant row/header builders (client) ------------------------ */
@@ -593,22 +684,20 @@ export function buildParticipantRow({ session_id, participant_id, events, posts,
 
   posts.forEach((p) => {
     const postEvents = events.filter(e => e.post_id === p.id);
-  
-    // latest (most recent) reaction for this post
+
     const lastReactionEvt = [...postEvents].reverse().find(e => e.action === "react_pick");
     const lastReaction = lastReactionEvt && lastReactionEvt.type ? String(lastReactionEvt.type) : "";
-  
+
     const commentedTexts = postEvents
       .filter(e => e.action === "comment_submit")
       .map(e => (e.text || "").trim())
       .filter(Boolean);
-  
+
     const expanded   = postEvents.some(e => e.action === "expand_text");
     const expandable = postEvents.some(e => e.action === "text_clamped");
-  
-    // Store only latest reaction
+
     row[`${p.id}_reacted`]          = lastReaction ? "1" : "0";
-    row[`${p.id}_reactions`]        = lastReaction;              // <— single value now
+    row[`${p.id}_reactions`]        = lastReaction;
     row[`${p.id}_expandable`]       = expandable ? "1" : "0";
     row[`${p.id}_expanded`]         = expanded ? "1" : "0";
     row[`${p.id}_commented`]        = commentedTexts.length > 0 ? "1" : "0";
@@ -624,7 +713,6 @@ export function buildParticipantRow({ session_id, participant_id, events, posts,
 export function extractPerPostFromRosterRow(row) {
   if (!row || typeof row !== "object") return {};
 
-  // A) JSON blob (if present)
   const blob = row.per_post_json || row.per_post || row.perPostJson || null;
   if (blob) {
     try {
@@ -653,7 +741,6 @@ export function extractPerPostFromRosterRow(row) {
     } catch {/* fall through */}
   }
 
-  // B) Wide columns
   const out = {};
   const ensure = (id) => {
     if (!out[id]) {
@@ -667,7 +754,6 @@ export function extractPerPostFromRosterRow(row) {
   };
 
   for (const [key, val] of Object.entries(row)) {
-    // booleans (0/1)
     const m = /^(.+?)_(reacted|commented|shared|reported_misinfo|expanded|expandable)$/.exec(key);
     if (m) {
       const [, postId, metric] = m;
@@ -678,7 +764,6 @@ export function extractPerPostFromRosterRow(row) {
       else obj[metric] = Number(val || 0);
       continue;
     }
-    // reactions list
     const r = /^(.+?)_(reactions|reaction_types)$/.exec(key);
     if (r) {
       const [, postId] = r;
@@ -692,7 +777,6 @@ export function extractPerPostFromRosterRow(row) {
       obj.reacted = obj.reacted || (arr.length ? 1 : 0);
       continue;
     }
-    // comment count
     const c = /^(.+?)_comment_count$/.exec(key);
     if (c) {
       const [, postId] = c;
@@ -705,12 +789,7 @@ export function extractPerPostFromRosterRow(row) {
 }
 
 /**
- * Load participants roster; supports both signatures:
- *   - loadParticipantsRoster(feedId)
- *   - loadParticipantsRoster(feedId, { signal })
- *   - loadParticipantsRoster({ signal })   // legacy, will use backend default
- *
- * NOTE: Requires admin_token for backend access.
+ * Load participants roster…
  */
 export async function loadParticipantsRoster(arg1, arg2) {
   let feedId = null;
@@ -744,7 +823,7 @@ export async function loadParticipantsRoster(arg1, arg2) {
   }
 }
 
-// --- Admin: wipe participants for a feed (requires admin_token)
+// --- Admin: wipe participants for a feed
 export async function wipeParticipantsOnBackend(feedId) {
   const admin_token = getAdminToken();
   if (!admin_token) return { ok: false, err: "admin auth required" };
@@ -753,7 +832,7 @@ export async function wipeParticipantsOnBackend(feedId) {
   try {
     const res = await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "cors", // read JSON to surface error details
+      mode: "cors",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({
         action: "wipe_participants",
@@ -783,9 +862,6 @@ const median = (arr) => {
 };
 const avg = (arr) => (arr.length ? arr.reduce((s, n) => s + n, 0) / arr.length : null);
 
-/**
- * Summarize a roster table produced by buildParticipantRow(...)
- */
 export function summarizeRoster(rows) {
   const total = rows.length;
   const completedRows = rows.filter(r => r.submitted_at_iso && String(r.submitted_at_iso).trim());
@@ -795,7 +871,6 @@ export function summarizeRoster(rows) {
   const submitTimes = completedRows.map(r => toNum(r.ms_enter_to_submit)).filter(Number.isFinite);
   const lastInteractionTimes = completedRows.map(r => toNum(r.ms_enter_to_last_interaction)).filter(Number.isFinite);
 
-  // Per-post tallies
   const postKeys = new Set();
   rows.forEach(r => {
     Object.keys(r).forEach(k => {

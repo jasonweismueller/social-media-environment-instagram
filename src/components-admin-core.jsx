@@ -14,6 +14,7 @@ import {
   loadPostsFromBackend,
   wipeParticipantsOnBackend,
   deleteFeedOnBackend,
+  // uploadVideoToBackend // (unused now; S3 signer flow replaces this)
 } from "./utils";
 
 // ⬇️ updated imports after UI split
@@ -22,6 +23,85 @@ import { Modal } from "./components-ui-core";
 
 import { ParticipantsPanel } from "./components-admin-parts";
 import { randomAvatarByKind } from "./avatar-utils";
+
+/* -------------------------------------------------------------------------- */
+/*  S3 signed upload helper (frontend)                                        */
+/*  - Ask your backend at /sign-upload for a signed PUT URL and final fileUrl */
+/*  - PUT the file directly to S3                                             */
+/*  - Return the final fileUrl to store on the post                           */
+/*  Dev tip: set window.SIGNER_BASE="http://localhost:4000" to bypass proxies */
+/* -------------------------------------------------------------------------- */
+// Put this at the top of components-admin-core.jsx (replaces your helper)
+// Helper: sign + PUT the file to S3 via your local signer (with base + logs)
+// Put this near the top (reuse your existing helper name if you like)
+const SIGNER_BASE =
+  (typeof window !== "undefined" && window.SIGNER_BASE) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SIGNER_BASE) ||
+  ""; // "" = same origin; else like "http://localhost:4000"
+
+// Progress-aware upload via signed PUT URL (XHR for progress)
+async function uploadFileToS3ViaSigner(file, onProgress) {
+  if (!file) throw new Error("[step0] No file provided");
+
+  const SIGNER_BASE =
+    (window.CONFIG && window.CONFIG.SIGNER_BASE) ||
+    "http://localhost:4000";
+
+  // ---- Step 1: get signed URL
+  const qs = new URLSearchParams({
+    filename: file.name,
+    type: file.type || "application/octet-stream",
+  }).toString();
+
+  const signUrl = `${SIGNER_BASE}/sign-upload?${qs}`;
+  console.debug("[step1] GET", signUrl);
+
+  let uploadUrl, fileUrl;
+  try {
+    const r = await fetch(signUrl, { method: "GET" });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`[step1] Signer error ${r.status} ${r.statusText} ${txt}`);
+    }
+    const json = await r.json();
+    uploadUrl = json.uploadUrl;
+    fileUrl   = json.fileUrl;
+    if (!uploadUrl || !fileUrl) throw new Error("[step1] Signer returned no URLs");
+  } catch (e) {
+    console.error(e);
+    throw new Error(e.message || "[step1] Failed to reach signer (CORS or URL)");
+  }
+
+  // ---- Step 2: PUT to S3 with progress
+  console.debug("[step2] PUT", uploadUrl);
+
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+
+    xhr.timeout = 120000; // 2min
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        onProgress(Math.round((evt.loaded / evt.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`[step2] S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+    };
+    xhr.onerror   = () => reject(new Error("[step2] Network error during PUT to S3"));
+    xhr.ontimeout = () => reject(new Error("[step2] PUT to S3 timed out"));
+    xhr.send(file);
+  });
+
+  console.debug("[step3] success", fileUrl);
+  return fileUrl;
+}
+
+
 
 /* -------------------- Random Post Generator helpers -------------------- */
 const RAND_NAMES = [
@@ -89,7 +169,7 @@ function makeRandomPost() {
     author, time, text, links: [],
     badge: chance(0.15),
 
-    // avatar controls (real photos for male/female; logos for company)
+    // avatar controls
     avatarMode: "random",
     avatarRandomKind,
     avatarUrl: randomAvatarByKind(avatarRandomKind, author, author, randomAvatarUrl),
@@ -195,6 +275,9 @@ export function AdminDashboard({
   const [editing, setEditing] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
+  // at top of AdminDashboard component:
+const [uploadingVideo, setUploadingVideo] = useState(false);
+const [uploadingPoster, setUploadingPoster] = useState(false);
 
   const [feeds, setFeeds] = useState([]);
   const [feedId, setFeedId] = useState("");
@@ -735,9 +818,22 @@ export function AdminDashboard({
                       if (type === "none") {
                         setEditing(ed => ({ ...ed, imageMode: "none", image: null, videoMode: "none", video: null, videoPosterUrl: "" }));
                       } else if (type === "image") {
-                        setEditing(ed => ({ ...ed, videoMode: "none", video: null, videoPosterUrl: "", imageMode: (ed.imageMode === "none" ? "random" : ed.imageMode) || "random", image: ed.image || randomSVG("Image") }));
+                        setEditing(ed => ({
+                          ...ed,
+                          videoMode: "none",
+                          video: null,
+                          videoPosterUrl: "",
+                          imageMode: (ed.imageMode === "none" ? "random" : ed.imageMode) || "random",
+                          image: ed.image || randomSVG("Image")
+                        }));
                       } else if (type === "video") {
-                        setEditing(ed => ({ ...ed, imageMode: "none", image: null, videoMode: (ed.videoMode === "none" ? "url" : ed.videoMode) || "url" }));
+                        setEditing(ed => ({
+                          ...ed,
+                          imageMode: "none",
+                          image: null,
+                          videoMode: (ed.videoMode === "none" ? "url" : ed.videoMode) || "url",
+                          video: ed.video || { url: "" }
+                        }));
                       }
                     }}
                   >
@@ -823,7 +919,11 @@ export function AdminDashboard({
                           value={editing.videoMode}
                           onChange={(e) => {
                             const m = e.target.value; // "url" | "upload"
-                            setEditing(ed => ({ ...ed, videoMode: m, video: m === "upload" ? ed.video : (ed.video || { url: "" }) }));
+                            setEditing(ed => ({
+                              ...ed,
+                              videoMode: m,
+                              video: m === "url" ? (ed.video || { url: "" }) : null
+                            }));
                           }}
                         >
                           <option value="url">Direct URL</option>
@@ -837,27 +937,57 @@ export function AdminDashboard({
                       <label>Video URL
                         <input
                           className="input"
-                          placeholder="https://…/clip.mp4"
-                          value={(editing.video?.url) || ""}
-                          onChange={(e) => setEditing(ed => ({ ...ed, video: { ...(ed.video || {}), url: e.target.value } }))}
+                          placeholder="https://…/clip.mp4 (S3/CloudFront URL)"
+                          value={editing.video?.url || ""}
+                          onChange={(e) =>
+                            setEditing(ed => ({
+                              ...ed,
+                              video: { ...(ed.video || {}), url: e.target.value }
+                            }))
+                          }
                         />
                       </label>
                     )}
 
-                    {editing.videoMode === "upload" && (
-                      <label>Upload video
-                        <input
-                          type="file"
-                          accept="video/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]; if (!f) return;
-                            // Data-URL is fine for prototype; for larger files consider hosting.
-                            const data = await fileToDataURL(f);
-                            setEditing(ed => ({ ...ed, video: { ...(ed.video || {}), url: data } }));
-                          }}
-                        />
-                      </label>
-                    )}
+{editing.videoMode === "upload" && (
+  <label>Upload video
+    <input
+      type="file"
+      accept="video/*"
+      onChange={async (e) => {
+        const f = e.target.files?.[0]; if (!f) return;
+        try {
+          // show a basic progress indicator in the title (or make your own UI)
+          let lastPct = 0;
+          const setPct = (pct) => {
+            lastPct = pct;
+            // quick-and-dirty: reflect in the dialog title bar
+            const el = document.querySelector(".modal h3, .section-title");
+            if (el) el.textContent = `Uploading… ${pct}%`;
+          };
+
+          const s3Url = await uploadFileToS3ViaSigner(f, setPct);
+
+          // restore title text
+          const el = document.querySelector(".modal h3, .section-title");
+          if (el) el.textContent = "Add Post";
+
+          setEditing(ed => ({
+            ...ed,
+            videoMode: "url",
+            video: { url: s3Url },
+          }));
+          alert("Video uploaded ✔");
+        } catch (err) {
+          console.error(err);
+          alert(String(err.message || "Video upload failed."));
+        } finally {
+          e.target.value = ""; // allow re-pick of same file
+        }
+      }}
+    />
+  </label>
+)}
 
                     <div className="grid-2">
                       <label>Poster image URL (optional)
@@ -874,8 +1004,15 @@ export function AdminDashboard({
                           accept="image/*"
                           onChange={async (e) => {
                             const f = e.target.files?.[0]; if (!f) return;
-                            const data = await fileToDataURL(f);
-                            setEditing(ed => ({ ...ed, videoPosterUrl: data }));
+                            try {
+                              const s3Url = await uploadFileToS3ViaSigner(f);
+                              setEditing(ed => ({ ...ed, videoPosterUrl: s3Url }));
+                            } catch (err) {
+                              console.error(err);
+                              alert(String(err.message || "Poster upload failed."));
+                            } finally {
+                              e.target.value = "";
+                            }
                           }}
                         />
                       </label>
@@ -975,8 +1112,8 @@ export function AdminDashboard({
                             setEditing({ ...editing, selectedReactions: Array.from(prev) });
                           }}
                         />
-                        <span className="emoji">{REACTION_META[key].emoji}</span>
-                        <span>{REACTION_META[key].label}</span>
+                          <span className="emoji">{REACTION_META[key].emoji}</span>
+                          <span>{REACTION_META[key].label}</span>
                       </label>
                     );
                   })}

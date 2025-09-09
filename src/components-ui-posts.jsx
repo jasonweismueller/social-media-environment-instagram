@@ -10,12 +10,33 @@ import {
   ActionBtn, PostText, Modal, NamesPeek, neutralAvatarDataUrl,
 } from "./components-ui-core";
 
+/* --- In-view autoplay hook --- */
+function useInViewAutoplay(threshold = 0.6) {
+    const wrapRef = React.useRef(null);
+    const [inView, setInView] = React.useState(false);
+  
+    React.useEffect(() => {
+      if (!wrapRef.current) return;
+      const el = wrapRef.current;
+      const obs = new IntersectionObserver(
+        ([e]) => setInView(!!(e?.isIntersecting && e.intersectionRatio >= threshold)),
+        { root: null, threshold: [0, threshold, 1] }
+      );
+      obs.observe(el);
+      return () => obs.disconnect();
+    }, [threshold]);
+  
+    return { wrapRef, inView };
+  }
+
 /* ----------------------------- Post Card ---------------------------------- */
 export function PostCard({ post, onAction, disabled, registerViewRef, respectShowReactions = false }) {
   const [reportAck, setReportAck] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showComment, setShowComment] = useState(false);
   const [commentText, setCommentText] = useState("");
+
+  
 
   // Participant comment (this session)
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
@@ -33,6 +54,9 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const openTimer  = useRef(null);
   const closeTimer = useRef(null);
+
+  // in-view detector for media
+  const { wrapRef, inView } = useInViewAutoplay(0.6);
 
   const scheduleOpen = () => {
     clearTimeout(openTimer.current);
@@ -118,7 +142,8 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   // --- VIDEO SUPPORT
   const videoRef = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(post.video?.startMuted !== false);
+  // default to admin flag; fallback to muted true (helps autoplay)
+  const [isMuted, setIsMuted] = useState(post.videoAutoplayMuted !== false);
 
   const onVideoTogglePlay = async () => {
     const v = videoRef.current;
@@ -133,7 +158,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
         setIsVideoPlaying(false);
         click("video_pause");
       }
-    } catch { /* autoplay block ignored */ }
+    } catch { /* ignore */ }
   };
   const onVideoToggleMute = () => {
     const v = videoRef.current;
@@ -412,37 +437,95 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
       {/* Media: prefer video, else image */}
       {post.video && post.videoMode !== "none" ? (
-        <div className="video-wrap">
-          <video
-            ref={videoRef}
-            className="video-el"
-            src={post.video.url}
-            poster={post.video.poster || undefined}
-            playsInline
-            muted={isMuted}
-            loop={!!post.video.loop}
-            onEnded={onVideoEnded}
-            controls={false}
-          />
-          <button
-            type="button"
-            className="video-center-btn"
-            aria-label={isVideoPlaying ? "Pause video" : "Play video"}
-            onClick={onVideoTogglePlay}
-            disabled={disabled}
-          >
-            {isVideoPlaying ? "❚❚" : "▶"}
-          </button>
-          <button
-            type="button"
-            className="video-mute-btn"
-            aria-label={isMuted ? "Unmute" : "Mute"}
-            onClick={onVideoToggleMute}
-            disabled={disabled}
-          >
-            {isMuted ? "🔇" : "🔊"}
-          </button>
-        </div>
+        (() => {
+          const u = post.video?.url || "";
+
+          // Detect Drive URLs
+          const isDrive =
+            /(?:^|\/\/)(?:drive\.google\.com|drive\.usercontent\.google\.com)/i.test(u);
+
+          // Extract Drive file ID from ?id=... or /d/<id>/
+          let driveId = null;
+          {
+            const qMatch = /[?&]id=([a-zA-Z0-9_-]+)/.exec(u);
+            const dMatch = /\/d\/([a-zA-Z0-9_-]+)/.exec(u);
+            if (qMatch) driveId = qMatch[1];
+            else if (dMatch) driveId = dMatch[1];
+          }
+
+          if (isDrive && driveId) {
+            // Drive preview player (autoplay not guaranteed)
+            return (
+              <div className="video-wrap drive-embed" ref={wrapRef}>
+                <iframe
+                  src={`https://drive.google.com/file/d/${driveId}/preview`}
+                  title="Drive video"
+                  loading="lazy"
+                  allow="autoplay; fullscreen"
+                  style={{
+                    width: "100%",
+                    height: "min(60vh, 520px)",
+                    border: 0,
+                    display: "block",
+                    background: "#000",
+                  }}
+                />
+              </div>
+            );
+          }
+
+          // Non-Drive (e.g., S3/CloudFront) → native <video> w/ in-view autoplay
+          return (
+            <div className="video-wrap" ref={wrapRef}>
+              <video
+                ref={videoRef}
+                className="video-el"
+                src={u}
+                poster={post.videoPosterUrl || undefined}
+                playsInline
+                muted={isMuted}               // required for autoplay on mobile
+                autoPlay={inView}             // attribute hint
+                preload="auto"
+                loop={!!post.videoLoop}
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+                onEnded={onVideoEnded}
+                controls={!!post.videoShowControls}
+                disablePictureInPicture
+                controlsList="nodownload noremoteplayback"
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  maxHeight: "min(60vh, 520px)",
+                  display: "block",
+                  background: "#000",
+                }}
+              />
+              {!post.videoShowControls && (
+                <>
+                  <button
+                    type="button"
+                    className="video-center-btn"
+                    aria-label={isVideoPlaying ? "Pause video" : "Play video"}
+                    onClick={onVideoTogglePlay}
+                    disabled={disabled}
+                  >
+                    {isVideoPlaying ? "❚❚" : "▶"}
+                  </button>
+                  <button
+                    type="button"
+                    className="video-mute-btn"
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    onClick={onVideoToggleMute}
+                    disabled={disabled}
+                  >
+                    {isMuted ? "🔇" : "🔊"}
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })()
       ) : post.image && post.imageMode !== "none" ? (
         <button className="image-btn" onClick={onImageOpen} disabled={disabled} aria-label="Open image">
           {post.image.svg ? (
@@ -451,7 +534,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                 __html: post.image.svg.replace(
                   "<svg ",
                   "<svg preserveAspectRatio='xMidYMid slice' style='display:block;width:100%;height:auto;max-height:min(60vh,520px)' "
-                )
+                ),
               }}
             />
           ) : post.image.url ? (
@@ -463,7 +546,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                 width: "100%",
                 height: "auto",
                 maxHeight: "min(60vh, 520px)",
-                objectFit: "cover"
+                objectFit: "cover",
               }}
               loading="lazy"
               decoding="async"
@@ -471,6 +554,12 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
           ) : null}
         </button>
       ) : null}
+
+      {/* Ensure programmatic play/pause on inView change for native <video> */}
+      {/*
+        This effect is placed after the video markup so refs are set.
+      */}
+      <InViewVideoController inView={inView} videoRef={videoRef} setIsVideoPlaying={setIsVideoPlaying} muted={isMuted} />
 
       {/* Ad card */}
       {post.adType === "ad" && (
@@ -681,6 +770,25 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
       )}
     </article>
   );
+}
+
+/* Programmatic in-view play/pause for native <video> */
+function InViewVideoController({ inView, videoRef, setIsVideoPlaying, muted }) {
+  useEffect(() => {
+    const v = videoRef?.current;
+    if (!v) return;
+    try {
+      if (inView) {
+        v.muted = muted !== false; // keep muted true unless explicitly false
+        v.play().then(() => setIsVideoPlaying(true)).catch(() => {});
+      } else {
+        v.pause();
+        setIsVideoPlaying(false);
+      }
+    } catch { /* ignore */ }
+  }, [inView, videoRef, setIsVideoPlaying, muted]);
+
+  return null;
 }
 
 /* ------------------------------- Feed ------------------------------------- */
