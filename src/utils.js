@@ -842,6 +842,7 @@ export function summarizeRoster(rows) {
  * - Returns a CloudFront playback URL for the saved object
  * ========================================================================= */
 /* ========================= S3 Upload via Presigner ========================= */
+/* ========================= S3 Upload via Presigner ========================= */
 
 export const CF_BASE =
   (typeof window !== "undefined" && window.CONFIG?.CF_BASE) ||
@@ -853,7 +854,7 @@ export const SIGNER_BASE =
 
 export const SIGNER_PATH =
   (typeof window !== "undefined" && window.CONFIG?.SIGNER_PATH) ||
-  "/default/presign-upload"; // your actual route
+  "/default/presign-upload";
 
 const joinUrl = (base, path) =>
   `${String(base).replace(/\/+$/,"")}/${String(path).replace(/^\/+/,"")}`;
@@ -877,16 +878,13 @@ function presignEndpoint() {
   );
 }
 
-/** Detailed fetch error helper (helps diagnose CORS vs network). */
 function explainFetchError(e) {
   if (e?.name === "AbortError") return "request timed out";
-  // When the browser blocks due to CORS or network, you usually get TypeError: Failed to fetch
   const m = String(e?.message || e || "").toLowerCase();
   if (m.includes("failed to fetch")) return "network/CORS (browser blocked the request)";
   return String(e?.message || e || "unknown error");
 }
 
-/** Get a presigned PUT URL from your API. */
 export async function getPresignedPutUrl({ key, contentType, timeoutMs = 20000 }) {
   const url = presignEndpoint();
   const ctrl = new AbortController();
@@ -905,7 +903,6 @@ export async function getPresignedPutUrl({ key, contentType, timeoutMs = 20000 }
       throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
     }
     const json = await res.json().catch(() => ({}));
-    // Support {url} or {uploadUrl,fileUrl/cdnUrl}
     const uploadUrl = json.url || json.uploadUrl;
     const fileUrl = json.cdnUrl || json.fileUrl || null;
     if (!uploadUrl) throw new Error("presigner response missing signed upload URL");
@@ -917,7 +914,6 @@ export async function getPresignedPutUrl({ key, contentType, timeoutMs = 20000 }
   }
 }
 
-/** PUT a file to S3 with progress. */
 export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -942,7 +938,6 @@ export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
   });
 }
 
-/** High-level helper used by the Admin editor. */
 export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
   if (!file) throw new Error("No file selected");
   if (!feedId) throw new Error("Missing feedId");
@@ -957,7 +952,6 @@ export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix
   const { uploadUrl, fileUrl } = await getPresignedPutUrl({ key, contentType });
   await putToS3({ file, signedPutUrl: uploadUrl, onProgress, contentType });
 
-  // Prefer explicit CDN/file URL if your signer returns it; otherwise, build CloudFront URL.
   const cdnUrl = fileUrl || `${CF_BASE}/${encodePathKeepSlashes(key)}`;
   return { key, cdnUrl };
 }
