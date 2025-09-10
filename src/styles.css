@@ -623,3 +623,42 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .video-mute-btn:hover { background: rgba(0,0,0,.7); }
 
+/* NEW */
+.video-wrap {
+  position: relative;
+  width: 100%;
+  background: #000;
+  overflow: hidden;
+  border-radius: 8px;
+  aspect-ratio: 16 / 9;                  /* fixed box; no layout jumps */
+  max-height: min(60vh, 520px);          /* clamp overall height */
+}
+
+.video-el {
+  position: absolute;                     /* fill the box */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;                    /* pillarbox for vertical videos */
+  background: #000;
+}
+
+/* Drive embed should also fill the box */
+.video-wrap.drive-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #000;
+}
+
+/* Make sure the center play button really centers inside the box */
+.video-center-btn {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  z-index: 2;                             /* over the video */
+}
+.video-mute-btn { z-index: 2; }
