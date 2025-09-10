@@ -468,15 +468,17 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
           if (isDrive && driveId) {
             // Drive preview player (autoplay not guaranteed)
             return (
-              <div className="video-wrap drive-embed" ref={wrapRef}>
+                <div className="video-wrap drive-embed" ref={wrapRef}>
                 <iframe
                   src={`https://drive.google.com/file/d/${driveId}/preview`}
                   title="Drive video"
                   loading="lazy"
                   allow="autoplay; fullscreen"
                   style={{
+                    position: "absolute",
+                    inset: 0,
                     width: "100%",
-                    height: "min(60vh, 520px)",
+                    height: "100%",
                     border: 0,
                     display: "block",
                     background: "#000",
