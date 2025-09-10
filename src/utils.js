@@ -1003,15 +1003,13 @@ async function resolvePresignUrl(body) {
 }
 
 /* Public: get signed PUT URL. Returns { uploadUrl, fileUrl? } */
-export async function getPresignedPutUrl({ key, contentType }) {
-  const body = { key, contentType };
-  const endpoint = await resolvePresignUrl(body);
-  const { uploadUrl, passThrough } = await tryPresign(endpoint, body);
-  // Prefer explicit fileUrl if backend returns it; otherwise build from CF_BASE+key
-  const fileUrl =
-    passThrough.fileUrl || `${CF_BASE}/${encodePathKeepSlashes(key)}`;
-  return { uploadUrl, fileUrl };
-}
+const base = (typeof window!=="undefined" && window.CONFIG?.SIGNER_BASE) || SIGNER_BASE;
+const path = (typeof window!=="undefined" && window.CONFIG?.SIGNER_PATH) || "/presign-upload";
+const res = await fetch(`${base}${path}`, {
+  method:"POST",
+  headers:{ "content-type":"application/json" },
+  body: JSON.stringify({ key, contentType })
+});
 
 /* PUT file with progress */
 export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
