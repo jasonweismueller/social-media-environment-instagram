@@ -489,53 +489,34 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
           // Non-Drive (e.g., S3/CloudFront) → native <video> w/ in-view autoplay
           return (
             <div className="video-wrap" ref={wrapRef}>
-              <video
-                ref={videoRef}
-                className="video-el"
-                src={u}
-                poster={post.videoPosterUrl || undefined}
-                playsInline
-                muted={isMuted}               // required for autoplay on mobile
-                autoPlay={inView}             // attribute hint
-                preload="auto"
-                loop={!!post.videoLoop}
-                onPlay={() => setIsVideoPlaying(true)}
-                onPause={() => setIsVideoPlaying(false)}
-                onEnded={onVideoEnded}
-                controls={!!post.videoShowControls}
-                disablePictureInPicture
-                controlsList="nodownload noremoteplayback"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  maxHeight: "min(60vh, 520px)",
-                  display: "block",
-                  background: "#000",
-                }}
-              />
-              {!post.videoShowControls && (
-                <>
-                  <button
-                    type="button"
-                    className="video-center-btn"
-                    aria-label={isVideoPlaying ? "Pause video" : "Play video"}
-                    onClick={onVideoTogglePlay}
-                    disabled={disabled}
-                  >
-                    {isVideoPlaying ? "❚❚" : "▶"}
-                  </button>
-                  <button
-                    type="button"
-                    className="video-mute-btn"
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                    onClick={onVideoToggleMute}
-                    disabled={disabled}
-                  >
-                    {isMuted ? "🔇" : "🔊"}
-                  </button>
-                </>
-              )}
-            </div>
+  <video
+    ref={videoRef}
+    className="video-el"
+    src={u}
+    poster={post.videoPosterUrl || undefined}
+    playsInline
+    muted={isMuted}
+    autoPlay={inView}
+    preload="auto"
+    loop={!!post.videoLoop}
+    onPlay={() => setIsVideoPlaying(true)}
+    onPause={() => setIsVideoPlaying(false)}
+    onEnded={onVideoEnded}
+    controls={!!post.videoShowControls}
+    disablePictureInPicture
+    controlsList="nodownload noremoteplayback"
+  />
+  {!post.videoShowControls && (
+    <>
+      <button type="button" className="video-center-btn" onClick={onVideoTogglePlay} disabled={disabled}>
+        {isVideoPlaying ? "❚❚" : "▶"}
+      </button>
+      <button type="button" className="video-mute-btn" onClick={onVideoToggleMute} disabled={disabled}>
+        {isMuted ? "🔇" : "🔊"}
+      </button>
+    </>
+  )}
+</div>
           );
         })()
       ) : post.image && post.imageMode !== "none" ? (
