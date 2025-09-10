@@ -25,83 +25,79 @@ import { ParticipantsPanel } from "./components-admin-parts";
 import { randomAvatarByKind } from "./avatar-utils";
 
 /* -------------------------------------------------------------------------- */
-/*  S3 signed upload helper (frontend)                                        */
-/*  - Ask your backend at /sign-upload for a signed PUT URL and final fileUrl */
-/*  - PUT the file directly to S3                                             */
-/*  - Return the final fileUrl to store on the post                           */
-/*  Dev tip: set window.SIGNER_BASE="http://localhost:4000" to bypass proxies */
+/*  CDN + Presigner config                                                    */
 /* -------------------------------------------------------------------------- */
-// Put this at the top of components-admin-core.jsx (replaces your helper)
-// Helper: sign + PUT the file to S3 via your local signer (with base + logs)
-// Put this near the top (reuse your existing helper name if you like)
-const SIGNER_BASE =
-  (typeof window !== "undefined" && window.SIGNER_BASE) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SIGNER_BASE) ||
-  ""; // "" = same origin; else like "http://localhost:4000"
+const CF_BASE = "https://d2bihrgvtn9bga.cloudfront.net"; // CloudFront domain
+const SIGNER_BASE = "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com"; // API Gateway base
 
-// Progress-aware upload via signed PUT URL (XHR for progress)
-async function uploadFileToS3ViaSigner(file, onProgress) {
-  if (!file) throw new Error("[step0] No file provided");
+// Utility: encode path segments but keep folder slashes
+function encodePathKeepSlashes(path) {
+  return String(path).split("/").map(encodeURIComponent).join("/");
+}
 
-  const SIGNER_BASE =
-    (window.CONFIG && window.CONFIG.SIGNER_BASE) ||
-    "http://localhost:4000";
+// Utility: sanitize filenames (remove risky chars)
+function sanitizeName(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\s+/g, "_")      // spaces → underscores
+    .replace(/[()]/g, "")      // drop parens
+    .replace(/[^a-z0-9._-]/g, ""); // keep safe set
+}
 
-  // ---- Step 1: get signed URL
-  const qs = new URLSearchParams({
-    filename: file.name,
-    type: file.type || "application/octet-stream",
-  }).toString();
+/**
+ * Presign + PUT to S3 (progress-enabled), return CloudFront URL.
+ * @param {File} file
+ * @param {string} feedId
+ * @param {function} onProgress 0..100
+ * @param {string} prefix "videos" | "posters"
+ */
+async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
+  if (!file) throw new Error("No file selected");
+  if (!feedId) throw new Error("Missing feedId");
 
-  const signUrl = `${SIGNER_BASE}/sign-upload?${qs}`;
-  console.debug("[step1] GET", signUrl);
+  const contentType = file.type || "application/octet-stream";
+  const ext = (file.name.split(".").pop() || "").toLowerCase() || (contentType.startsWith("video/") ? "mp4" : "bin");
 
-  let uploadUrl, fileUrl;
-  try {
-    const r = await fetch(signUrl, { method: "GET" });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`[step1] Signer error ${r.status} ${r.statusText} ${txt}`);
-    }
-    const json = await r.json();
-    uploadUrl = json.uploadUrl;
-    fileUrl   = json.fileUrl;
-    if (!uploadUrl || !fileUrl) throw new Error("[step1] Signer returned no URLs");
-  } catch (e) {
-    console.error(e);
-    throw new Error(e.message || "[step1] Failed to reach signer (CORS or URL)");
+  const ts = Date.now();
+  const base = sanitizeName(file.name.replace(/\.[^.]+$/, "")) || `file_${ts}`;
+  const key = `${prefix}/${feedId}/${ts}_${base}.${ext}`; // versioned key (cache-friendly)
+
+  // 1) Presign
+  const res = await fetch(`${SIGNER_BASE}/presign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key, contentType })
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Presign failed: ${res.status} ${res.statusText} ${txt}`);
   }
+  const { url: signedPutUrl } = await res.json();
+  if (!signedPutUrl) throw new Error("Presign response missing URL");
 
-  // ---- Step 2: PUT to S3 with progress
-  console.debug("[step2] PUT", uploadUrl);
-
+  // 2) PUT with progress
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", uploadUrl);
-
-    xhr.timeout = 120000; // 2min
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.open("PUT", signedPutUrl);
+    xhr.timeout = 120000; // 2m
+    xhr.setRequestHeader("Content-Type", contentType);
 
     xhr.upload.onprogress = (evt) => {
       if (evt.lengthComputable && onProgress) {
         onProgress(Math.round((evt.loaded / evt.total) * 100));
       }
     };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`[step2] S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
-    };
-    xhr.onerror   = () => reject(new Error("[step2] Network error during PUT to S3"));
-    xhr.ontimeout = () => reject(new Error("[step2] PUT to S3 timed out"));
+    xhr.onload = () =>
+      (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+    xhr.onerror = () => reject(new Error("Network error during S3 upload"));
+    xhr.ontimeout = () => reject(new Error("S3 upload timed out"));
     xhr.send(file);
   });
 
-  console.debug("[step3] success", fileUrl);
-  return fileUrl;
+  // 3) CloudFront playback URL
+  const cdnUrl = `${CF_BASE}/${encodePathKeepSlashes(key)}`;
+  return { key, cdnUrl };
 }
-
-
 
 /* -------------------- Random Post Generator helpers -------------------- */
 const RAND_NAMES = [
@@ -276,8 +272,8 @@ export function AdminDashboard({
   const [isNew, setIsNew] = useState(false);
   const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
   // at top of AdminDashboard component:
-const [uploadingVideo, setUploadingVideo] = useState(false);
-const [uploadingPoster, setUploadingPoster] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingPoster, setUploadingPoster] = useState(false);
 
   const [feeds, setFeeds] = useState([]);
   const [feedId, setFeedId] = useState("");
@@ -937,7 +933,7 @@ const [uploadingPoster, setUploadingPoster] = useState(false);
                       <label>Video URL
                         <input
                           className="input"
-                          placeholder="https://…/clip.mp4 (S3/CloudFront URL)"
+                          placeholder="https://…/clip.mp4 (CloudFront URL)"
                           value={editing.video?.url || ""}
                           onChange={(e) =>
                             setEditing(ed => ({
@@ -949,45 +945,44 @@ const [uploadingPoster, setUploadingPoster] = useState(false);
                       </label>
                     )}
 
-{editing.videoMode === "upload" && (
-  <label>Upload video
-    <input
-      type="file"
-      accept="video/*"
-      onChange={async (e) => {
-        const f = e.target.files?.[0]; if (!f) return;
-        try {
-          // show a basic progress indicator in the title (or make your own UI)
-          let lastPct = 0;
-          const setPct = (pct) => {
-            lastPct = pct;
-            // quick-and-dirty: reflect in the dialog title bar
-            const el = document.querySelector(".modal h3, .section-title");
-            if (el) el.textContent = `Uploading… ${pct}%`;
-          };
+                    {editing.videoMode === "upload" && (
+                      <label>Upload video
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            try {
+                              setUploadingVideo(true);
+                              let lastPct = 0;
+                              const setPct = (pct) => {
+                                lastPct = pct;
+                                const el = document.querySelector(".modal h3, .section-title");
+                                if (el) el.textContent = `Uploading… ${pct}%`;
+                              };
 
-          const s3Url = await uploadFileToS3ViaSigner(f, setPct);
+                              const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, onProgress: setPct, prefix: "videos" });
 
-          // restore title text
-          const el = document.querySelector(".modal h3, .section-title");
-          if (el) el.textContent = "Add Post";
+                              const el = document.querySelector(".modal h3, .section-title");
+                              if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
 
-          setEditing(ed => ({
-            ...ed,
-            videoMode: "url",
-            video: { url: s3Url },
-          }));
-          alert("Video uploaded ✔");
-        } catch (err) {
-          console.error(err);
-          alert(String(err.message || "Video upload failed."));
-        } finally {
-          e.target.value = ""; // allow re-pick of same file
-        }
-      }}
-    />
-  </label>
-)}
+                              setEditing(ed => ({
+                                ...ed,
+                                videoMode: "url",
+                                video: { url: cdnUrl },
+                              }));
+                              alert("Video uploaded ✔");
+                            } catch (err) {
+                              console.error(err);
+                              alert(String(err.message || "Video upload failed."));
+                            } finally {
+                              setUploadingVideo(false);
+                              e.target.value = ""; // allow re-pick
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
 
                     <div className="grid-2">
                       <label>Poster image URL (optional)
@@ -1005,12 +1000,15 @@ const [uploadingPoster, setUploadingPoster] = useState(false);
                           onChange={async (e) => {
                             const f = e.target.files?.[0]; if (!f) return;
                             try {
-                              const s3Url = await uploadFileToS3ViaSigner(f);
-                              setEditing(ed => ({ ...ed, videoPosterUrl: s3Url }));
+                              setUploadingPoster(true);
+                              const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, prefix: "posters" });
+                              setEditing(ed => ({ ...ed, videoPosterUrl: cdnUrl }));
+                              alert("Poster uploaded ✔");
                             } catch (err) {
                               console.error(err);
                               alert(String(err.message || "Poster upload failed."));
                             } finally {
+                              setUploadingPoster(false);
                               e.target.value = "";
                             }
                           }}
@@ -1087,6 +1085,7 @@ const [uploadingPoster, setUploadingPoster] = useState(false);
                   </label>
                 )}
               </fieldset>
+
 
               <h4 className="section-title">Reactions & Metrics</h4>
               <fieldset className="fieldset">
