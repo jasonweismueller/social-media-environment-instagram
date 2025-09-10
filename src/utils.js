@@ -537,75 +537,6 @@ export const randomSVG = (title = "Image") => {
   };
 };
 
-/* --------------------------- File helpers ---------------------------------- */
-export function fileToDataURL(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-// utils.js
-
-/**
- * Upload a File/Blob to S3 using your local signer (AWS SDK v2).
- * Returns the public file URL to save on the post (post.video.url).
- *
- * @param {File|Blob|string} fileOrDataUrl  - File, Blob, or dataURL string
- * @param {string} filename                  - desired filename (e.g., "clip.mp4")
- * @param {string} mime                      - e.g., "video/mp4"
- * @param {string} signerBase                - e.g., "http://localhost:4000"
- */
-export async function uploadVideoToBackend(fileOrDataUrl, filename, mime = "video/mp4", signerBase = "http://localhost:4000") {
-  // 1) Normalize to a Blob
-  let blob;
-  if (typeof fileOrDataUrl === "string" && fileOrDataUrl.startsWith("data:")) {
-    const base64 = fileOrDataUrl.split(",")[1] || "";
-    const binStr = atob(base64);
-    const len = binStr.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binStr.charCodeAt(i);
-    blob = new Blob([bytes], { type: mime });
-  } else if (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob) {
-    blob = fileOrDataUrl;
-    mime = blob.type || mime;
-    if (!filename && fileOrDataUrl instanceof File) filename = fileOrDataUrl.name;
-  } else {
-    throw new Error("uploadVideoToBackend: expected File/Blob or dataURL");
-  }
-
-  // 2) Ask your signer for a presigned PUT URL
-  const q = new URLSearchParams({
-    filename: filename || `video-${Date.now()}.mp4`,
-    type: mime || "video/mp4",
-  });
-  const signRes = await fetch(`${signerBase}/sign-upload?${q.toString()}`);
-  if (!signRes.ok) {
-    const txt = await signRes.text().catch(() => "");
-    throw new Error(`Signer failed: HTTP ${signRes.status} ${txt}`);
-  }
-  const { uploadUrl, fileUrl, error } = await signRes.json();
-  if (!uploadUrl || !fileUrl || error) {
-    throw new Error(error || "Signer did not return uploadUrl/fileUrl");
-  }
-
-  // 3) PUT the file directly to S3
-  const putRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": mime },
-    body: blob,
-  });
-  if (!putRes.ok) {
-    const txt = await putRes.text().catch(() => "");
-    throw new Error(`S3 PUT failed: HTTP ${putRes.status} ${txt}`);
-  }
-
-  // 4) Return the public URL (ensure your bucket policy/CORS are set for reads)
-  return fileUrl;
-}
-
 /* --------------------------- Feed ID helper -------------------------------- */
 export function computeFeedId(posts = []) {
   const src = posts.map(p =>
@@ -910,15 +841,6 @@ export function summarizeRoster(rows) {
  * - Uploads directly to S3 with progress (XHR)
  * - Returns a CloudFront playback URL for the saved object
  * ========================================================================= */
-
-
-
-/* ========================= S3 Upload via Presigner =========================
- * Auto-detects the correct presign path under SIGNER_BASE and caches it.
- * Tries common patterns: /presign, /prod/presign, /dev/presign, /api/presign,
- * /v1/presign, /sign-upload. Works with responses {url} or {uploadUrl,fileUrl}.
- * ========================================================================= */
-
 export const CF_BASE =
   (typeof window !== "undefined" && window.CONFIG?.CF_BASE) ||
   "https://d2bihrgvtn9bga.cloudfront.net";
@@ -927,27 +849,14 @@ export const SIGNER_BASE =
   (typeof window !== "undefined" && window.CONFIG?.SIGNER_BASE) ||
   "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com";
 
-/* Optional override if you know the exact relative path, e.g. "/prod/presign" */
 export const SIGNER_PATH =
-  (typeof window !== "undefined" && window.CONFIG?.SIGNER_PATH) || "";
+  (typeof window !== "undefined" && window.CONFIG?.SIGNER_PATH) ||
+  "/default/presign-upload";
 
-/* Candidates to try if SIGNER_PATH is not set */
-const PRESIGN_PATHS = [
-  "/presign",
-  "/prod/presign",
-  "/dev/presign",
-  "/api/presign",
-  "/v1/presign",
-  "/sign-upload"
-];
+export function encodePathKeepSlashes(path) {
+  return String(path).split("/").map(encodeURIComponent).join("/");
+}
 
-const PRESIGN_CACHE_KEY = "presign_path_v1";
-
-/* Small helpers */
-const join = (base, path) =>
-  `${String(base).replace(/\/+$/,"")}/${String(path).replace(/^\/+/,"")}`;
-const encodePathKeepSlashes = (path) =>
-  String(path).split("/").map(encodeURIComponent).join("/");
 export function sanitizeName(name) {
   return (name || "")
     .toLowerCase()
@@ -956,98 +865,51 @@ export function sanitizeName(name) {
     .replace(/[^a-z0-9._-]/g, "");
 }
 
-/* Try one endpoint; accept {url} or {uploadUrl,fileUrl} */
-async function tryPresign(fullUrl, body) {
-  const res = await fetch(fullUrl, {
+export async function getPresignedPutUrl({ key, contentType }) {
+  const res = await fetch(`${SIGNER_BASE}${SIGNER_PATH}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify({ key, contentType })
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Presign failed: ${res.status} ${txt}`);
+  }
   const json = await res.json().catch(() => ({}));
-  const url = json.url || json.uploadUrl;
-  if (!url) throw new Error("missing signed url");
-  return { uploadUrl: url, passThrough: json };
+  const uploadUrl = json.url || json.uploadUrl;
+  if (!uploadUrl) throw new Error("Presign response missing upload URL");
+  const fileUrl = json.cdnUrl || json.fileUrl || `${CF_BASE}/${encodePathKeepSlashes(key)}`;
+  return { uploadUrl, fileUrl };
 }
 
-/* Resolve and cache the working presign URL */
-async function resolvePresignUrl(body) {
-  const cached = localStorage.getItem(PRESIGN_CACHE_KEY);
-  if (cached) {
-    try {
-      const full = JSON.parse(cached);
-      await tryPresign(full, body); // validate still good
-      return full;
-    } catch {
-      localStorage.removeItem(PRESIGN_CACHE_KEY);
-    }
-  }
-
-  const candidates = SIGNER_PATH
-    ? [join(SIGNER_BASE, SIGNER_PATH)]
-    : PRESIGN_PATHS.map(p => join(SIGNER_BASE, p));
-
-  let lastErr = null;
-  for (const url of candidates) {
-    try {
-      await tryPresign(url, body);
-      localStorage.setItem(PRESIGN_CACHE_KEY, JSON.stringify(url));
-      return url;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw new Error(
-    `No presign endpoint matched under SIGNER_BASE. Last error: ${lastErr?.message || lastErr}`
-  );
-}
-
-/* Public: get signed PUT URL. Returns { uploadUrl, fileUrl? } */
-const base = (typeof window!=="undefined" && window.CONFIG?.SIGNER_BASE) || SIGNER_BASE;
-const path = (typeof window!=="undefined" && window.CONFIG?.SIGNER_PATH) || "/presign-upload";
-const res = await fetch(`${base}${path}`, {
-  method:"POST",
-  headers:{ "content-type":"application/json" },
-  body: JSON.stringify({ key, contentType })
-});
-
-/* PUT file with progress */
 export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", signedPutUrl);
     xhr.timeout = 120000;
-    xhr.setRequestHeader(
-      "Content-Type",
-      contentType || file.type || "application/octet-stream"
-    );
+    xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
     xhr.upload.onprogress = (evt) => {
       if (evt.lengthComputable && onProgress) {
         onProgress(Math.round((evt.loaded / evt.total) * 100));
       }
     };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+      ? resolve()
+      : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
     xhr.onerror = () => reject(new Error("Network error during S3 upload"));
     xhr.ontimeout = () => reject(new Error("S3 upload timed out"));
     xhr.send(file);
   });
 }
 
-/* High-level helper used by Admin editor */
 export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
   if (!file) throw new Error("No file selected");
   if (!feedId) throw new Error("Missing feedId");
-
   const contentType = file.type || "application/octet-stream";
-  const ext = (file.name.split(".").pop() || "").toLowerCase() ||
-              (contentType.startsWith("video/") ? "mp4" : "bin");
+  const ext = (file.name.split(".").pop() || "").toLowerCase() || (contentType.startsWith("video/") ? "mp4" : "bin");
   const ts = Date.now();
   const base = sanitizeName(file.name.replace(/\.[^.]+$/, "")) || `file_${ts}`;
   const key = `${prefix}/${feedId}/${ts}_${base}.${ext}`;
-
   const { uploadUrl, fileUrl } = await getPresignedPutUrl({ key, contentType });
   await putToS3({ file, signedPutUrl: uploadUrl, onProgress, contentType });
   return { key, cdnUrl: fileUrl };
