@@ -1063,7 +1063,7 @@ export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix
     xhr.send(file);
   });
 
-  // ---- CloudFront URL back ----
+  // ---- CloudFront URL back ---------
   const cdnUrl = `${String(CF_BASE).replace(/\/+$/,"")}/${encodePathKeepSlashes(key)}`;
   return { key, cdnUrl };
 }
