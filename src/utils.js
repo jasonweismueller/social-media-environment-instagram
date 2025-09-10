@@ -911,9 +911,6 @@ export function summarizeRoster(rows) {
  * - Returns a CloudFront playback URL for the saved object
  * ========================================================================= */
 
-
-
-
 export const CF_BASE =
   (window.CONFIG && window.CONFIG.CF_BASE) ||
   "https://d2bihrgvtn9bga.cloudfront.net";
@@ -923,10 +920,29 @@ export const SIGNER_BASE =
   "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com"; // <- your API GW base (with or without stage)
 
 /** Join base + path safely (no double slashes) */
+// utils: presign via GET (no preflight)
 function joinUrl(base, path) {
-  return `${String(base).replace(/\/+$/,"")}/${String(path).replace(/^\/+/,"")}`;
+  return `${String(base).replace(/\/+$/,'')}/${String(path).replace(/^\/+/,'')}`;
 }
+export async function getPresignedPutUrl({ key, contentType, timeoutMs = 15000 }) {
+  const base = (window.CONFIG && window.CONFIG.SIGNER_BASE) || "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com";
+  const path = (window.CONFIG && window.CONFIG.SIGNER_PATH) || "/default/presign-upload";
+  const url  = new URL(joinUrl(base, path));
+  url.searchParams.set("key", key);
+  url.searchParams.set("contentType", contentType);
 
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url.toString(), { method: "GET", mode: "cors", credentials: "omit", signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    const uploadUrl = j.url || j.uploadUrl;
+    const fileUrl   = j.cdnUrl || j.fileUrl || null;
+    if (!uploadUrl) throw new Error("presigner response missing URL");
+    return { uploadUrl, fileUrl };
+  } finally { clearTimeout(t); }
+}
 /** Fail if we’re on https and presigner is http (mixed content) */
 function assertNoMixedContent(url) {
   if (window?.location?.protocol === "https:" && String(url).startsWith("http:")) {
