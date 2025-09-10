@@ -904,3 +904,106 @@ export function summarizeRoster(rows) {
     perPost,
   };
 }
+
+/* ========================= S3 Upload via Presigner =========================
+ * - Uses API Gateway HTTP API (POST /presign) to get a signed PUT URL
+ * - Uploads directly to S3 with progress (XHR)
+ * - Returns a CloudFront playback URL for the saved object
+ * ========================================================================= */
+
+export const CF_BASE =
+  (typeof window !== "undefined" && window.CONFIG?.CF_BASE) ||
+  "https://d2bihrgvtn9bga.cloudfront.net"; // your CloudFront domain
+
+export const SIGNER_BASE =
+  (typeof window !== "undefined" && window.CONFIG?.SIGNER_BASE) ||
+  "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com"; // your API base (no trailing slash)
+
+/** Encode each path segment but keep folder slashes */
+export function encodePathKeepSlashes(path) {
+  return String(path).split("/").map(encodeURIComponent).join("/");
+}
+
+/** Sanitize a filename (defensive) */
+export function sanitizeName(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[()]/g, "")
+    .replace(/[^a-z0-9._-]/g, "");
+}
+
+/**
+ * Get a presigned PUT URL from the API.
+ * @param {string} key - s3 object key
+ * @param {string} contentType - MIME type to enforce on S3
+ */
+export async function getPresignedPutUrl({ key, contentType }) {
+  const res = await fetch(`${SIGNER_BASE}/presign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key, contentType })
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Presign failed: ${res.status} ${res.statusText} ${txt}`);
+  }
+  const json = await res.json().catch(() => ({}));
+  if (!json || !json.url) throw new Error("Presign response missing URL");
+  return json.url;
+}
+
+/**
+ * Upload a File/Blob to S3 using a presigned PUT URL.
+ * Progress reported via XHR upload.onprogress.
+ */
+export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", signedPutUrl);
+    xhr.timeout = 120000; // 2 minutes
+    xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        onProgress(Math.round((evt.loaded / evt.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error during S3 upload"));
+    xhr.ontimeout = () => reject(new Error("S3 upload timed out"));
+    xhr.send(file);
+  });
+}
+
+/**
+ * High-level helper: build key → presign → upload → return CloudFront URL
+ * @param {File} file
+ * @param {string} feedId
+ * @param {function} onProgress
+ * @param {string} prefix - "videos" | "posters" | etc.
+ */
+export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
+  if (!file) throw new Error("No file selected");
+  if (!feedId) throw new Error("Missing feedId");
+
+  const contentType = file.type || "application/octet-stream";
+  const ext = (file.name.split(".").pop() || "").toLowerCase() || (contentType.startsWith("video/") ? "mp4" : "bin");
+  const ts = Date.now();
+  const base = sanitizeName(file.name.replace(/\.[^.]+$/, "")) || `file_${ts}`;
+  const key = `${prefix}/${feedId}/${ts}_${base}.${ext}`;
+
+  // 1) presign
+  const signedPutUrl = await getPresignedPutUrl({ key, contentType });
+
+  // 2) upload
+  await putToS3({ file, signedPutUrl, onProgress, contentType });
+
+  // 3) playback URL (CloudFront)
+  const cdnUrl = `${CF_BASE}/${encodePathKeepSlashes(key)}`;
+  return { key, cdnUrl };
+}

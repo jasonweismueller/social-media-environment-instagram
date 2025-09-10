@@ -14,184 +14,16 @@ import {
   loadPostsFromBackend,
   wipeParticipantsOnBackend,
   deleteFeedOnBackend,
-  // uploadVideoToBackend // (unused now; S3 signer flow replaces this)
 } from "./utils";
 
 // ⬇️ updated imports after UI split
 import { PostCard } from "./components-ui-posts";
 import { Modal } from "./components-ui-core";
-
 import { ParticipantsPanel } from "./components-admin-parts";
 import { randomAvatarByKind } from "./avatar-utils";
 
-/* -------------------------------------------------------------------------- */
-/*  CDN + Presigner config                                                    */
-/* -------------------------------------------------------------------------- */
-const CF_BASE = "https://d2bihrgvtn9bga.cloudfront.net"; // CloudFront domain
-const SIGNER_BASE = "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com"; // API Gateway base
-
-// Utility: encode path segments but keep folder slashes
-function encodePathKeepSlashes(path) {
-  return String(path).split("/").map(encodeURIComponent).join("/");
-}
-
-// Utility: sanitize filenames (remove risky chars)
-function sanitizeName(name) {
-  return (name || "")
-    .toLowerCase()
-    .replace(/\s+/g, "_")      // spaces → underscores
-    .replace(/[()]/g, "")      // drop parens
-    .replace(/[^a-z0-9._-]/g, ""); // keep safe set
-}
-
-/**
- * Presign + PUT to S3 (progress-enabled), return CloudFront URL.
- * @param {File} file
- * @param {string} feedId
- * @param {function} onProgress 0..100
- * @param {string} prefix "videos" | "posters"
- */
-async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
-  if (!file) throw new Error("No file selected");
-  if (!feedId) throw new Error("Missing feedId");
-
-  const contentType = file.type || "application/octet-stream";
-  const ext = (file.name.split(".").pop() || "").toLowerCase() || (contentType.startsWith("video/") ? "mp4" : "bin");
-
-  const ts = Date.now();
-  const base = sanitizeName(file.name.replace(/\.[^.]+$/, "")) || `file_${ts}`;
-  const key = `${prefix}/${feedId}/${ts}_${base}.${ext}`; // versioned key (cache-friendly)
-
-  // 1) Presign
-  const res = await fetch(`${SIGNER_BASE}/presign`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ key, contentType })
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Presign failed: ${res.status} ${res.statusText} ${txt}`);
-  }
-  const { url: signedPutUrl } = await res.json();
-  if (!signedPutUrl) throw new Error("Presign response missing URL");
-
-  // 2) PUT with progress
-  await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", signedPutUrl);
-    xhr.timeout = 120000; // 2m
-    xhr.setRequestHeader("Content-Type", contentType);
-
-    xhr.upload.onprogress = (evt) => {
-      if (evt.lengthComputable && onProgress) {
-        onProgress(Math.round((evt.loaded / evt.total) * 100));
-      }
-    };
-    xhr.onload = () =>
-      (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
-    xhr.onerror = () => reject(new Error("Network error during S3 upload"));
-    xhr.ontimeout = () => reject(new Error("S3 upload timed out"));
-    xhr.send(file);
-  });
-
-  // 3) CloudFront playback URL
-  const cdnUrl = `${CF_BASE}/${encodePathKeepSlashes(key)}`;
-  return { key, cdnUrl };
-}
-
-/* -------------------- Random Post Generator helpers -------------------- */
-const RAND_NAMES = [
-  "Jordan Li","Maya Patel","Samir Khan","Alex Chen","Luca Rossi",
-  "Nora Williams","Priya Nair","Diego Santos","Hana Suzuki","Ava Johnson",
-  "Ethan Brown","Isabella Garcia","Leo Muller","Zoe Martin","Ibrahim Ali"
-];
-const RAND_TIMES = ["Just now","2m","8m","23m","1h","2h","3h","Yesterday","2d","3d"];
-const LOREM_SNIPPETS = [
-  "This is wild—can't believe it happened.","Anyone else following this?",
-  "New details emerging as we speak.","Here is what I've learned so far.",
-  "Not saying it is true, but interesting.","Quick thread on what matters here.",
-  "Posting this for discussion.","Context below—make up your own mind.",
-  "Sharing for visibility.","Thoughts?","Sources seem mixed on this.",
-  "Bookmarking this for later.","Some folks say this is misleading.",
-  "If accurate, this is big.","Adding a couple links in the comments."
-];
-const NOTE_SNIPPETS = [
-  "Independent fact-checkers say the claim lacks supporting evidence.",
-  "Multiple sources indicate the post omits key context.",
-  "Experts disagree and advise caution when sharing.",
-  "Additional reporting contradicts the central claim."
-];
-const randPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const randInt  = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
-const chance   = (p) => Math.random() < p;
-
-function makeRandomPost() {
-  const author = randPick(RAND_NAMES);
-  const time = randPick(RAND_TIMES);
-  const text = Array.from({ length: randInt(1, 3) }, () => randPick(LOREM_SNIPPETS)).join(" ");
-
-  // Randomly choose image or no media (videos are opt-in via editor)
-  const willHaveImage = chance(0.55);
-
-  const interventionType = chance(0.20) ? randPick(["label", "note"]) : "none";
-  const noteText = interventionType === "note" ? randPick(NOTE_SNIPPETS) : "";
-
-  const showReactions = chance(0.85);
-  const rxKeys = Object.keys(REACTION_META);
-  const selectedReactions = showReactions
-    ? rxKeys.sort(() => 0.5 - Math.random()).slice(0, randInt(1, 3))
-    : ["like"];
-
-  const baseCount = randInt(5, 120);
-  const rx = (p) => randInt(0, Math.floor(baseCount*p));
-  const reactions = {
-    like:  chance(0.9) ? rx(0.6) : 0,
-    love:  chance(0.5) ? rx(0.5) : 0,
-    care:  chance(0.25)? rx(0.3) : 0,
-    haha:  chance(0.35)? rx(0.4) : 0,
-    wow:   chance(0.3) ? rx(0.35): 0,
-    sad:   chance(0.2) ? rx(0.25): 0,
-    angry: chance(0.2) ? rx(0.25): 0,
-  };
-  const metrics = {
-    comments: chance(0.6) ? rx(0.5) : 0,
-    shares:   chance(0.4) ? rx(0.35): 0,
-  };
-
-  const avatarRandomKind = "any";
-
-  return {
-    id: uid(),
-    author, time, text, links: [],
-    badge: chance(0.15),
-
-    // avatar controls
-    avatarMode: "random",
-    avatarRandomKind,
-    avatarUrl: randomAvatarByKind(avatarRandomKind, author, author, randomAvatarUrl),
-
-    // media (image OR video — mutually exclusive in editor)
-    imageMode: willHaveImage ? "random" : "none",
-    image: willHaveImage ? randomSVG(randPick(["Image", "Update", "Breaking"])) : null,
-
-    videoMode: "none",
-    video: null,               // { url, type?, posterUrl? }
-    videoPosterUrl: "",        // optional
-    videoAutoplayMuted: true,  // default like FB feed
-    videoShowControls: true,
-    videoLoop: false,
-
-    interventionType, noteText,
-    showReactions, selectedReactions, reactions, metrics,
-
-    // ads
-    adType: "none",
-    adDomain: "",
-    adHeadline: "",
-    adSubheadline: "",
-    adButtonText: "",
-  };
-}
+// NEW: media fieldset split out
+import { MediaFieldset } from "./components-admin-media";
 
 /* ------------------------ Tiny admin stats fetcher ------------------------ */
 async function fetchParticipantsStats(feedId) {
@@ -271,7 +103,6 @@ export function AdminDashboard({
   const [editing, setEditing] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
-  // at top of AdminDashboard component:
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadingPoster, setUploadingPoster] = useState(false);
 
@@ -799,249 +630,15 @@ export function AdminDashboard({
                 )}
               </fieldset>
 
-              {/* ----------------------- MEDIA (Image OR Video) ----------------------- */}
-              <h4 className="section-title">Post Media</h4>
-              <fieldset className="fieldset">
-                <label>Media type
-                  <select
-                    className="select"
-                    value={
-                      editing.videoMode !== "none" ? "video"
-                      : (editing.imageMode !== "none" ? "image" : "none")
-                    }
-                    onChange={(e) => {
-                      const type = e.target.value;
-                      if (type === "none") {
-                        setEditing(ed => ({ ...ed, imageMode: "none", image: null, videoMode: "none", video: null, videoPosterUrl: "" }));
-                      } else if (type === "image") {
-                        setEditing(ed => ({
-                          ...ed,
-                          videoMode: "none",
-                          video: null,
-                          videoPosterUrl: "",
-                          imageMode: (ed.imageMode === "none" ? "random" : ed.imageMode) || "random",
-                          image: ed.image || randomSVG("Image")
-                        }));
-                      } else if (type === "video") {
-                        setEditing(ed => ({
-                          ...ed,
-                          imageMode: "none",
-                          image: null,
-                          videoMode: (ed.videoMode === "none" ? "url" : ed.videoMode) || "url",
-                          video: ed.video || { url: "" }
-                        }));
-                      }
-                    }}
-                  >
-                    <option value="none">None</option>
-                    <option value="image">Image</option>
-                    <option value="video">Video</option>
-                  </select>
-                </label>
-
-                {/* IMAGE controls */}
-                {editing.videoMode === "none" && editing.imageMode !== "none" && (
-                  <>
-                    <div className="grid-2">
-                      <label>Image mode
-                        <select
-                          className="select"
-                          value={editing.imageMode}
-                          onChange={(e) => {
-                            const m = e.target.value;
-                            let image = editing.image;
-                            if (m === "none") image = null;
-                            if (m === "random") image = randomSVG("Image");
-                            setEditing({ ...editing, imageMode: m, image });
-                          }}
-                        >
-                          <option value="random">Random graphic</option>
-                          <option value="upload">Upload image</option>
-                          <option value="url">Direct URL</option>
-                          <option value="none">No image</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    {editing.imageMode === "url" && (
-                      <label>Image URL
-                        <input
-                          className="input"
-                          value={(editing.image && editing.image.url) || ""}
-                          onChange={(e) =>
-                            setEditing({
-                              ...editing,
-                              image: { ...(editing.image||{}), url: e.target.value, alt: (editing.image && editing.image.alt) || "Image" }
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-                    {editing.imageMode === "upload" && (
-                      <label>Upload image
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            const data = await fileToDataURL(f);
-                            setEditing((ed) => ({ ...ed, imageMode: "upload", image: { alt: "Image", url: data } }));
-                          }}
-                        />
-                      </label>
-                    )}
-
-                    {(editing.imageMode === "upload" || editing.imageMode === "url") && editing.image?.url && (
-                      <div className="img-preview" style={{ maxWidth:"100%", maxHeight:"min(40vh, 360px)", minHeight:120, overflow:"hidden", borderRadius:8, background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:8 }}>
-                        <img src={editing.image.url} alt={editing.image.alt || ""} style={{ maxWidth:"100%", maxHeight:"100%", width:"auto", height:"auto", display:"block" }} />
-                      </div>
-                    )}
-                    {editing.imageMode === "random" && editing.image?.svg && (
-                      <div className="img-preview" style={{ maxWidth:"100%", maxHeight:"min(40vh, 360px)", minHeight:120, overflow:"hidden", borderRadius:8, background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:8 }}>
-                        <div className="svg-wrap" dangerouslySetInnerHTML={{ __html: editing.image.svg.replace("<svg ", "<svg preserveAspectRatio='xMidYMid meet' style='display:block;max-width:100%;height:auto;max-height:100%' ") }} />
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* VIDEO controls */}
-                {editing.videoMode !== "none" && (
-                  <>
-                    <div className="grid-2">
-                      <label>Video source
-                        <select
-                          className="select"
-                          value={editing.videoMode}
-                          onChange={(e) => {
-                            const m = e.target.value; // "url" | "upload"
-                            setEditing(ed => ({
-                              ...ed,
-                              videoMode: m,
-                              video: m === "url" ? (ed.video || { url: "" }) : null
-                            }));
-                          }}
-                        >
-                          <option value="url">Direct URL</option>
-                          <option value="upload">Upload video</option>
-                        </select>
-                      </label>
-                      <div />
-                    </div>
-
-                    {editing.videoMode === "url" && (
-                      <label>Video URL
-                        <input
-                          className="input"
-                          placeholder="https://…/clip.mp4 (CloudFront URL)"
-                          value={editing.video?.url || ""}
-                          onChange={(e) =>
-                            setEditing(ed => ({
-                              ...ed,
-                              video: { ...(ed.video || {}), url: e.target.value }
-                            }))
-                          }
-                        />
-                      </label>
-                    )}
-
-                    {editing.videoMode === "upload" && (
-                      <label>Upload video
-                        <input
-                          type="file"
-                          accept="video/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]; if (!f) return;
-                            try {
-                              setUploadingVideo(true);
-                              let lastPct = 0;
-                              const setPct = (pct) => {
-                                lastPct = pct;
-                                const el = document.querySelector(".modal h3, .section-title");
-                                if (el) el.textContent = `Uploading… ${pct}%`;
-                              };
-
-                              const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, onProgress: setPct, prefix: "videos" });
-
-                              const el = document.querySelector(".modal h3, .section-title");
-                              if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
-
-                              setEditing(ed => ({
-                                ...ed,
-                                videoMode: "url",
-                                video: { url: cdnUrl },
-                              }));
-                              alert("Video uploaded ✔");
-                            } catch (err) {
-                              console.error(err);
-                              alert(String(err.message || "Video upload failed."));
-                            } finally {
-                              setUploadingVideo(false);
-                              e.target.value = ""; // allow re-pick
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-
-                    <div className="grid-2">
-                      <label>Poster image URL (optional)
-                        <input
-                          className="input"
-                          placeholder="https://…/poster.jpg"
-                          value={editing.videoPosterUrl || ""}
-                          onChange={(e) => setEditing(ed => ({ ...ed, videoPosterUrl: e.target.value }))}
-                        />
-                      </label>
-                      <label>Upload poster (optional)
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0]; if (!f) return;
-                            try {
-                              setUploadingPoster(true);
-                              const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, prefix: "posters" });
-                              setEditing(ed => ({ ...ed, videoPosterUrl: cdnUrl }));
-                              alert("Poster uploaded ✔");
-                            } catch (err) {
-                              console.error(err);
-                              alert(String(err.message || "Poster upload failed."));
-                            } finally {
-                              setUploadingPoster(false);
-                              e.target.value = "";
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    <div className="grid-3">
-                      <label className="checkbox">
-                        <input
-                          type="checkbox"
-                          checked={!!editing.videoAutoplayMuted}
-                          onChange={(e) => setEditing(ed => ({ ...ed, videoAutoplayMuted: !!e.target.checked }))}
-                        /> Autoplay muted
-                      </label>
-                      <label className="checkbox">
-                        <input
-                          type="checkbox"
-                          checked={!!editing.videoShowControls}
-                          onChange={(e) => setEditing(ed => ({ ...ed, videoShowControls: !!e.target.checked }))}
-                        /> Show controls
-                      </label>
-                      <label className="checkbox">
-                        <input
-                          type="checkbox"
-                          checked={!!editing.videoLoop}
-                          onChange={(e) => setEditing(ed => ({ ...ed, videoLoop: !!e.target.checked }))}
-                        /> Loop
-                      </label>
-                    </div>
-                  </>
-                )}
-              </fieldset>
+              {/* ----------------------- MEDIA (moved to its own file) ----------------------- */}
+              <MediaFieldset
+                editing={editing}
+                setEditing={setEditing}
+                feedId={feedId}
+                isNew={isNew}
+                setUploadingVideo={setUploadingVideo}
+                setUploadingPoster={setUploadingPoster}
+              />
 
               <h4 className="section-title">Ad</h4>
               <fieldset className="fieldset">
@@ -1085,7 +682,6 @@ export function AdminDashboard({
                   </label>
                 )}
               </fieldset>
-
 
               <h4 className="section-title">Reactions & Metrics</h4>
               <fieldset className="fieldset">
@@ -1200,4 +796,87 @@ export function AdminDashboard({
       )}
     </div>
   );
+}
+
+// -------------------- Random Post Generator helpers --------------------
+// (kept at bottom to keep core file tidy)
+const RAND_NAMES = [
+  "Jordan Li","Maya Patel","Samir Khan","Alex Chen","Luca Rossi",
+  "Nora Williams","Priya Nair","Diego Santos","Hana Suzuki","Ava Johnson",
+  "Ethan Brown","Isabella Garcia","Leo Muller","Zoe Martin","Ibrahim Ali"
+];
+const RAND_TIMES = ["Just now","2m","8m","23m","1h","2h","3h","Yesterday","2d","3d"];
+const LOREM_SNIPPETS = [
+  "This is wild—can't believe it happened.","Anyone else following this?",
+  "New details emerging as we speak.","Here is what I've learned so far.",
+  "Not saying it is true, but interesting.","Quick thread on what matters here.",
+  "Posting this for discussion.","Context below—make up your own mind.",
+  "Sharing for visibility.","Thoughts?","Sources seem mixed on this.",
+  "Bookmarking this for later.","Some folks say this is misleading.",
+  "If accurate, this is big.","Adding a couple links in the comments."
+];
+const NOTE_SNIPPETS = [
+  "Independent fact-checkers say the claim lacks supporting evidence.",
+  "Multiple sources indicate the post omits key context.",
+  "Experts disagree and advise caution when sharing.",
+  "Additional reporting contradicts the central claim."
+];
+const randPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const randInt  = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+const chance   = (p) => Math.random() < p;
+
+function makeRandomPost() {
+  const author = randPick(RAND_NAMES);
+  const time = randPick(RAND_TIMES);
+  const text = Array.from({ length: randInt(1, 3) }, () => randPick(LOREM_SNIPPETS)).join(" ");
+  const willHaveImage = chance(0.55);
+  const interventionType = chance(0.20) ? randPick(["label", "note"]) : "none";
+  const noteText = interventionType === "note" ? randPick(NOTE_SNIPPETS) : "";
+  const showReactions = chance(0.85);
+  const rxKeys = Object.keys(REACTION_META);
+  const selectedReactions = showReactions
+    ? rxKeys.sort(() => 0.5 - Math.random()).slice(0, randInt(1, 3))
+    : ["like"];
+
+  const baseCount = randInt(5, 120);
+  const rx = (p) => randInt(0, Math.floor(baseCount*p));
+  const reactions = {
+    like:  chance(0.9) ? rx(0.6) : 0,
+    love:  chance(0.5) ? rx(0.5) : 0,
+    care:  chance(0.25)? rx(0.3) : 0,
+    haha:  chance(0.35)? rx(0.4) : 0,
+    wow:   chance(0.3) ? rx(0.35): 0,
+    sad:   chance(0.2) ? rx(0.25): 0,
+    angry: chance(0.2) ? rx(0.25): 0,
+  };
+  const metrics = {
+    comments: chance(0.6) ? rx(0.5) : 0,
+    shares:   chance(0.4) ? rx(0.35): 0,
+  };
+
+  const avatarRandomKind = "any";
+
+  return {
+    id: uid(),
+    author, time, text, links: [],
+    badge: chance(0.15),
+    avatarMode: "random",
+    avatarRandomKind,
+    avatarUrl: randomAvatarByKind(avatarRandomKind, author, author, randomAvatarUrl),
+    imageMode: willHaveImage ? "random" : "none",
+    image: willHaveImage ? randomSVG(randPick(["Image", "Update", "Breaking"])) : null,
+    videoMode: "none",
+    video: null,
+    videoPosterUrl: "",
+    videoAutoplayMuted: true,
+    videoShowControls: true,
+    videoLoop: false,
+    interventionType, noteText,
+    showReactions, selectedReactions, reactions, metrics,
+    adType: "none",
+    adDomain: "",
+    adHeadline: "",
+    adSubheadline: "",
+    adButtonText: "",
+  };
 }
