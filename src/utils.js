@@ -906,6 +906,7 @@ export function summarizeRoster(rows) {
 }
 
 /* ========================= S3 Upload via Presigner ========================= */
+// ---- S3 Upload via Presigner (GET, no preflight) ----
 
 export const CF_BASE =
   (window.CONFIG && window.CONFIG.CF_BASE) ||
@@ -917,10 +918,10 @@ export const SIGNER_BASE =
 
 export const SIGNER_PATH =
   (window.CONFIG && window.CONFIG.SIGNER_PATH) ||
-  "/default/presign-upload";
+  "/default/presign-upload"; // this is your working route
 
 function joinUrl(base, path) {
-  return `${String(base).replace(/\/+$/,"")}/${String(path).replace(/^\/+/,"")}`;
+  return `${String(base).replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
 }
 
 export function encodePathKeepSlashes(path) {
@@ -935,24 +936,38 @@ export function sanitizeName(name) {
     .replace(/[^a-z0-9._-]/g, "");
 }
 
+function sniffFileMeta(file) {
+  const contentType = file.type || "application/octet-stream";
+  const ext =
+    (file.name.split(".").pop() || "").toLowerCase() ||
+    (contentType.startsWith("video/") ? "mp4" : "bin");
+  const nameNoExt = (file.name || "").replace(/\.[^.]+$/, "");
+  return { contentType, ext, nameNoExt };
+}
+
+// Ask your signer for a presigned PUT URL via GET (no custom headers → no preflight)
 export async function getPresignedPutUrl({ key, contentType, timeoutMs = 15000 }) {
-  const u = new URL(joinUrl(SIGNER_BASE, SIGNER_PATH));
-  u.searchParams.set("key", key);
-  u.searchParams.set("contentType", contentType);
+  const url = new URL(joinUrl(SIGNER_BASE, SIGNER_PATH));
+  url.searchParams.set("key", key);
+  url.searchParams.set("contentType", contentType);
 
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(u.toString(), {
+    const res = await fetch(url.toString(), {
       method: "GET",
       mode: "cors",
       credentials: "omit",
-      signal: ctrl.signal
+      cache: "no-store",
+      signal: ctrl.signal,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${res.statusText} ${txt}`.trim());
+    }
     const j = await res.json();
     const uploadUrl = j.url || j.uploadUrl;
-    const fileUrl   = j.cdnUrl || j.fileUrl || null;
+    const fileUrl = j.cdnUrl || j.fileUrl || null;
     if (!uploadUrl) throw new Error("presigner response missing URL");
     return { uploadUrl, fileUrl };
   } finally {
@@ -960,38 +975,48 @@ export async function getPresignedPutUrl({ key, contentType, timeoutMs = 15000 }
   }
 }
 
+// PUT file with progress
 export async function putToS3({ file, signedPutUrl, onProgress, contentType }) {
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", signedPutUrl);
     xhr.timeout = 120000;
     xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        onProgress(Math.round((evt.loaded / evt.total) * 100));
+      }
     };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
-      ? resolve()
-      : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`S3 PUT ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+
     xhr.onerror = () => reject(new Error("Network error during S3 upload"));
     xhr.ontimeout = () => reject(new Error("S3 upload timed out"));
     xhr.send(file);
   });
 }
 
+// High-level helper used by Admin editor
 export async function uploadFileToS3ViaSigner({ file, feedId, onProgress, prefix = "videos" }) {
   if (!file) throw new Error("No file selected");
   if (!feedId) throw new Error("Missing feedId");
 
-  const contentType = file.type || "application/octet-stream";
-  const ext = (file.name.split(".").pop() || "").toLowerCase() ||
-              (contentType.startsWith("video/") ? "mp4" : "bin");
+  const { contentType, ext, nameNoExt } = sniffFileMeta(file);
   const ts = Date.now();
-  const base = sanitizeName((file.name || "").replace(/\.[^.]+$/, "")) || `file_${ts}`;
+  const base = sanitizeName(nameNoExt) || `file_${ts}`;
   const key = `${prefix}/${feedId}/${ts}_${base}.${ext}`;
 
+  // presign via GET (no preflight)
   const { uploadUrl, fileUrl } = await getPresignedPutUrl({ key, contentType });
+
+  // upload
   await putToS3({ file, signedPutUrl: uploadUrl, onProgress, contentType });
 
-  const cdnUrl = fileUrl || `${String(CF_BASE).replace(/\/+$/,"")}/${encodePathKeepSlashes(key)}`;
+  // return CloudFront URL (fallback to CF_BASE if signer didn't return one)
+  const cdnUrl = fileUrl || `${String(CF_BASE).replace(/\/+$/, "")}/${encodePathKeepSlashes(key)}`;
   return { key, cdnUrl };
 }
