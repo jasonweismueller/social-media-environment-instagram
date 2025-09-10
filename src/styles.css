@@ -575,18 +575,20 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 .video-wrap {
   position: relative;
   width: 100%;
+  aspect-ratio: 16 / 9;   /* the slot shape – shows pillarboxing for portrait */
   background: #000;
   overflow: hidden;
   border-radius: 8px;
 }
+
 .video-el {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
-  max-height: min(60vh, 520px);
-  object-fit: contain; /* no crop */
-  background: #000;    /* shows the bars cleanly */
-}
+  height: 100%;            /* important: both dimensions set */
+  object-fit: contain;     /* no crop; black bars left/right for vertical video */
+  display: block;
+  background: #000;
 }
 .video-center-btn {
   position: absolute;
