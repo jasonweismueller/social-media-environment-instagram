@@ -84,7 +84,7 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                 </thead>
                 <tbody>
                   {perPost.map((p) => {
-                    // Accept dwell_s first; else convert ms→s as a fallback
+                    // Prefer seconds; else convert ms→s as a fallback
                     const dwellSeconds = Number.isFinite(p.dwell_s)
                       ? Number(p.dwell_s)
                       : Number.isFinite(p.dwell_ms)
@@ -216,14 +216,41 @@ export function ParticipantsPanel({ feedId }) {
 
   const visible = useMemo(() => sorted.slice(0, pageSize), [sorted, pageSize]);
 
+  // Compute avg dwell seconds per post by scanning the roster rows (handles both _dwell_s and legacy _dwell_ms)
+  const avgDwellSByPost = useMemo(() => {
+    const acc = new Map(); // id -> {sum, count}
+    if (!rows?.length) return acc;
+    for (const r of rows) {
+      for (const k of Object.keys(r)) {
+        let m = k.match(/^(.*)_dwell_s$/);
+        if (m) {
+          const id = m[1];
+          const s = Number(r[k] || 0);
+          if (!acc.has(id)) acc.set(id, { sum: 0, count: 0 });
+          const a = acc.get(id);
+          a.sum += s;
+          a.count += 1;
+          continue;
+        }
+        m = k.match(/^(.*)_dwell_ms$/);
+        if (m) {
+          const id = m[1];
+          const s = Math.round(Number(r[k] || 0) / 1000);
+          if (!acc.has(id)) acc.set(id, { sum: 0, count: 0 });
+          const a = acc.get(id);
+          a.sum += s;
+          a.count += 1;
+        }
+      }
+    }
+    return acc;
+  }, [rows]);
+
   const perPostList = useMemo(() => {
     if (!showPerPost || !summary?.perPost) return [];
     return Object.entries(summary.perPost).map(([id, agg]) => {
-      // Prefer seconds if summarizeRoster provides avgDwellS; else convert ms→s
-      const avgDwellS =
-        Number.isFinite(agg?.avgDwellS) ? Number(agg.avgDwellS)
-        : Number.isFinite(agg?.avgDwellMs) ? Number(agg.avgDwellMs) / 1000
-        : null;
+      const dwellAcc = avgDwellSByPost.get(id);
+      const avgDwellS = dwellAcc && dwellAcc.count > 0 ? dwellAcc.sum / dwellAcc.count : null;
       return {
         id,
         reacted: agg.reacted,
@@ -236,7 +263,7 @@ export function ParticipantsPanel({ feedId }) {
         avgDwellS,
       };
     });
-  }, [showPerPost, summary]);
+  }, [showPerPost, summary, avgDwellSByPost]);
 
   return (
     <div className="card" style={{ padding: "1rem" }}>
@@ -252,8 +279,31 @@ export function ParticipantsPanel({ feedId }) {
             className="btn"
             onClick={() => {
               if (!rows?.length) return;
-              const header = Object.keys(rows[0]);
-              const csv = toCSV(rows, header);
+
+              // Transform: any *_dwell_ms -> *_dwell_s (rounded seconds), drop *_dwell_ms
+              const rowsForCsv = rows.map((r) => {
+                const out = { ...r };
+                for (const k of Object.keys(r)) {
+                  const m = k.match(/^(.*)_dwell_ms$/);
+                  if (m) {
+                    const base = m[1];
+                    const sKey = `${base}_dwell_s`;
+                    if (out[sKey] == null) {
+                      const ms = Number(r[k] || 0);
+                      out[sKey] = Math.round(ms / 1000);
+                    }
+                    delete out[k];
+                  }
+                }
+                return out;
+              });
+
+              // Build header as union of keys across transformed rows (so *_dwell_s appears even if row 0 was legacy)
+              const headerSet = new Set();
+              rowsForCsv.forEach(r => Object.keys(r).forEach(k => headerSet.add(k)));
+              const header = Array.from(headerSet);
+
+              const csv = toCSV(rowsForCsv, header);
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -361,7 +411,6 @@ export function ParticipantsPanel({ feedId }) {
                       onClick={() => {
                         const perPostHash = extractPerPostFromRosterRow(r);
                         const perPost = Object.entries(perPostHash).map(([post_id, agg]) => {
-                          // Prefer dwell_s, else convert dwell_ms→s
                           const dwell_s = Number.isFinite(agg?.dwell_s)
                             ? Number(agg.dwell_s)
                             : Number.isFinite(agg?.dwell_ms)

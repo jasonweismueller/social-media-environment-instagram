@@ -819,7 +819,7 @@ export function buildParticipantRow({
 export function extractPerPostFromRosterRow(row) {
   if (!row || typeof row !== "object") return {};
 
-  // If backend sent a packed per_post_json blob, prefer it.
+  // If backend returns a JSON blob, parse it first
   const blob = row.per_post_json || row.per_post || row.perPostJson || null;
   if (blob) {
     try {
@@ -833,10 +833,12 @@ export function extractPerPostFromRosterRow(row) {
           ? rx.split(",").map(s => s.trim()).filter(Boolean)
           : [];
 
-        const dwellMs = Number(agg?.dwell_ms || 0);
-        const dwellS  = Number.isFinite(Number(agg?.dwell_s))
-          ? Number(agg?.dwell_s)
-          : Math.round(dwellMs / 1000);
+        // dwell seconds preferred; else convert ms → s
+        const dwell_s = Number.isFinite(agg?.dwell_s)
+          ? Number(agg.dwell_s)
+          : Number.isFinite(agg?.dwell_ms)
+          ? Math.round(Number(agg.dwell_ms) / 1000)
+          : 0;
 
         clean[id] = {
           reacted: Number(agg?.reacted || (rxArr.length ? 1 : 0)),
@@ -848,15 +850,18 @@ export function extractPerPostFromRosterRow(row) {
           reactions: rxArr,
           reaction_types: rxArr,
           comment_count: Number(agg?.comment_count || 0),
-          dwell_ms: dwellMs,
-          dwell_s: dwellS,
+
+          // NEW
+          dwell_s,
         };
       }
       return clean;
-    } catch {/* fall through */}
+    } catch {
+      /* fall through to flat-columns parsing */
+    }
   }
 
-  // Otherwise, reconstruct from flattened columns.
+  // Otherwise parse flat columns
   const out = {};
   const ensure = (id) => {
     if (!out[id]) {
@@ -864,7 +869,7 @@ export function extractPerPostFromRosterRow(row) {
         reacted: 0, commented: 0, shared: 0, reported: 0,
         expandable: 0, expanded: 0,
         reactions: [], reaction_types: [], comment_count: 0,
-        dwell_ms: 0, dwell_s: 0,
+        dwell_s: 0,
       };
     }
     return out[id];
@@ -884,7 +889,7 @@ export function extractPerPostFromRosterRow(row) {
         continue;
       }
     }
-    // reactions array (string)
+    // reactions list
     {
       const r = /^(.+?)_(reactions|reaction_types)$/.exec(key);
       if (r) {
@@ -911,17 +916,24 @@ export function extractPerPostFromRosterRow(row) {
         continue;
       }
     }
-    // dwell (either seconds or legacy ms)
+    // dwell in seconds (preferred)
     {
-      const d = /^(.+?)_dwell_(s|ms)$/.exec(key);
-      if (d) {
-        const [, postId, unit] = d;
+      const ds = /^(.+?)_dwell_s$/.exec(key);
+      if (ds) {
+        const [, postId] = ds;
         const obj = ensure(postId);
-        if (unit === "s") {
-          obj.dwell_s = Number(val || 0);
-        } else {
-          obj.dwell_ms = Number(val || 0);
-          if (!obj.dwell_s) obj.dwell_s = Math.round(Number(val || 0) / 1000);
+        obj.dwell_s = Number(val || 0);
+        continue;
+      }
+    }
+    // dwell in ms (fallback → convert to seconds)
+    {
+      const dm = /^(.+?)_dwell_ms$/.exec(key);
+      if (dm) {
+        const [, postId] = dm;
+        const obj = ensure(postId);
+        if (!Number.isFinite(obj.dwell_s) || obj.dwell_s === 0) {
+          obj.dwell_s = Math.round(Number(val || 0) / 1000);
         }
       }
     }
