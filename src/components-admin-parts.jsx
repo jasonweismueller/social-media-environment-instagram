@@ -378,7 +378,6 @@ export function ParticipantsPanel({ feedId }) {
                             shared: Number(agg.shared) === 1,
                             reported: Number(agg.reported) === 1,
                             dwell_s,
-                            dwell_ms: Number(agg.dwell_ms || 0), // kept only for back-compat display fallback
                           };
                         });
                         setDetailSubmission({
