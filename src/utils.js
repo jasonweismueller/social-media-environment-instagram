@@ -819,6 +819,7 @@ export function buildParticipantRow({
 export function extractPerPostFromRosterRow(row) {
   if (!row || typeof row !== "object") return {};
 
+  // If backend sent a packed per_post_json blob, prefer it.
   const blob = row.per_post_json || row.per_post || row.perPostJson || null;
   if (blob) {
     try {
@@ -831,6 +832,12 @@ export function extractPerPostFromRosterRow(row) {
           : typeof rx === "string"
           ? rx.split(",").map(s => s.trim()).filter(Boolean)
           : [];
+
+        const dwellMs = Number(agg?.dwell_ms || 0);
+        const dwellS  = Number.isFinite(Number(agg?.dwell_s))
+          ? Number(agg?.dwell_s)
+          : Math.round(dwellMs / 1000);
+
         clean[id] = {
           reacted: Number(agg?.reacted || (rxArr.length ? 1 : 0)),
           commented: Number(agg?.commented || (Number(agg?.comment_count) > 0 ? 1 : 0)),
@@ -841,12 +848,15 @@ export function extractPerPostFromRosterRow(row) {
           reactions: rxArr,
           reaction_types: rxArr,
           comment_count: Number(agg?.comment_count || 0),
+          dwell_ms: dwellMs,
+          dwell_s: dwellS,
         };
       }
       return clean;
     } catch {/* fall through */}
   }
 
+  // Otherwise, reconstruct from flattened columns.
   const out = {};
   const ensure = (id) => {
     if (!out[id]) {
@@ -854,41 +864,66 @@ export function extractPerPostFromRosterRow(row) {
         reacted: 0, commented: 0, shared: 0, reported: 0,
         expandable: 0, expanded: 0,
         reactions: [], reaction_types: [], comment_count: 0,
+        dwell_ms: 0, dwell_s: 0,
       };
     }
     return out[id];
   };
 
   for (const [key, val] of Object.entries(row)) {
-    const m = /^(.+?)_(reacted|commented|shared|reported_misinfo|expanded|expandable)$/.exec(key);
-    if (m) {
-      const [, postId, metric] = m;
-      const obj = ensure(postId);
-      if (metric === "reported_misinfo") obj.reported = Number(val || 0);
-      else if (metric === "expanded")    obj.expanded = Number(val || 0);
-      else if (metric === "expandable")  obj.expandable = Number(val || 0);
-      else obj[metric] = Number(val || 0);
-      continue;
+    // booleans
+    {
+      const m = /^(.+?)_(reacted|commented|shared|reported_misinfo|expanded|expandable)$/.exec(key);
+      if (m) {
+        const [, postId, metric] = m;
+        const obj = ensure(postId);
+        if (metric === "reported_misinfo") obj.reported = Number(val || 0);
+        else if (metric === "expanded")    obj.expanded = Number(val || 0);
+        else if (metric === "expandable")  obj.expandable = Number(val || 0);
+        else obj[metric] = Number(val || 0);
+        continue;
+      }
     }
-    const r = /^(.+?)_(reactions|reaction_types)$/.exec(key);
-    if (r) {
-      const [, postId] = r;
-      const obj = ensure(postId);
-      const arr = String(val || "")
-        .split(",")
-        .map(s => s.trim())
-        .filter(Boolean);
-      obj.reactions = arr;
-      obj.reaction_types = arr;
-      obj.reacted = obj.reacted || (arr.length ? 1 : 0);
-      continue;
+    // reactions array (string)
+    {
+      const r = /^(.+?)_(reactions|reaction_types)$/.exec(key);
+      if (r) {
+        const [, postId] = r;
+        const obj = ensure(postId);
+        const arr = String(val || "")
+          .split(",")
+          .map(s => s.trim())
+          .filter(Boolean);
+        obj.reactions = arr;
+        obj.reaction_types = arr;
+        obj.reacted = obj.reacted || (arr.length ? 1 : 0);
+        continue;
+      }
     }
-    const c = /^(.+?)_comment_count$/.exec(key);
-    if (c) {
-      const [, postId] = c;
-      const obj = ensure(postId);
-      obj.comment_count = Number(val || 0);
-      obj.commented = obj.commented || (obj.comment_count > 0 ? 1 : 0);
+    // comment count
+    {
+      const c = /^(.+?)_comment_count$/.exec(key);
+      if (c) {
+        const [, postId] = c;
+        const obj = ensure(postId);
+        obj.comment_count = Number(val || 0);
+        obj.commented = obj.commented || (obj.comment_count > 0 ? 1 : 0);
+        continue;
+      }
+    }
+    // dwell (either seconds or legacy ms)
+    {
+      const d = /^(.+?)_dwell_(s|ms)$/.exec(key);
+      if (d) {
+        const [, postId, unit] = d;
+        const obj = ensure(postId);
+        if (unit === "s") {
+          obj.dwell_s = Number(val || 0);
+        } else {
+          obj.dwell_ms = Number(val || 0);
+          if (!obj.dwell_s) obj.dwell_s = Math.round(Number(val || 0) / 1000);
+        }
+      }
     }
   }
   return out;
@@ -996,7 +1031,17 @@ export function summarizeRoster(rows) {
     const shared     = rows.reduce((acc, r) => acc + (Number(r[`${base}_shared`]) || 0), 0);
     const reported   = rows.reduce((acc, r) => acc + (Number(r[`${base}_reported_misinfo`]) || 0), 0);
     const expandRate = expandable > 0 ? expanded / expandable : null;
-    perPost[base] = { reacted, expandable, expanded, expandRate, commented, shared, reported };
+    const dwellSArr = rows
+  .map(r => {
+    const s = Number(r[`${base}_dwell_s`]);
+    if (Number.isFinite(s)) return s;
+    const ms = Number(r[`${base}_dwell_ms`]);
+    return Number.isFinite(ms) ? Math.round(ms / 1000) : null;
+  })
+  .filter(n => Number.isFinite(n));
+const avgDwellS = dwellSArr.length ? dwellSArr.reduce((a,b)=>a+b,0) / dwellSArr.length : null;
+
+perPost[base] = { reacted, expandable, expanded, expandRate, commented, shared, reported, avgDwellS };
   }
 
   return {
