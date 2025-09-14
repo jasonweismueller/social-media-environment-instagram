@@ -695,10 +695,10 @@ export function buildParticipantRow({
   feed_checksum,
 }) {
   // --- session timing
-  const entered = events.find(e => e.action === "participant_id_entered");
+  const entered   = events.find(e => e.action === "participant_id_entered");
   const submitted = events.find(e => e.action === "feed_submit");
 
-  const entered_at_iso = entered?.timestamp_iso || null;
+  const entered_at_iso   = entered?.timestamp_iso || null;
   const submitted_at_iso = submitted?.timestamp_iso || null;
 
   const ms_enter_to_submit =
@@ -718,7 +718,8 @@ export function buildParticipantRow({
       : null;
 
   // --- per-post aggregates
-  const dwellMap = computeDwellByPost(events); // Map(post_id -> ms)
+  // Use the helper that already converts to SECONDS and accounts for tab visibility.
+  const dwellSecMap = computePostDwellSecondsFromEvents(events); // Map(post_id -> seconds)
 
   // Helper trackers
   const per = new Map();
@@ -749,7 +750,6 @@ export function buildParticipantRow({
         p.reactions += 1;
         break;
       case "react_clear":
-        // keep reacted=true if they ever reacted; don't decrement reactions below 0
         p.reactions = Math.max(0, p.reactions - 1);
         break;
       case "text_clamped":
@@ -808,8 +808,8 @@ export function buildParticipantRow({
     row[`${id}_shared`] = agg.shared ? 1 : 0;
     row[`${id}_reported_misinfo`] = agg.reported_misinfo ? 1 : 0;
 
-    // NEW: dwell
-    row[`${id}_dwell_ms`] = dwellMap.get(id) || 0;
+    // NEW: dwell in SECONDS
+    row[`${id}_dwell_s`] = dwellSecMap.get(id) ?? 0;
   }
 
   return row;

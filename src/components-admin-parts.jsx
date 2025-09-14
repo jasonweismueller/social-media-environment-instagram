@@ -9,7 +9,6 @@ import {
 } from "./utils";
 
 /* --------------------------- tiny helper + stat --------------------------- */
-// Format milliseconds as m:ss
 function ms(n) {
   if (n == null) return "—";
   const s = Math.round(n / 1000);
@@ -17,7 +16,6 @@ function ms(n) {
   const sec = String(s % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
-// Format milliseconds as m:ss (short)
 function msShort(n) {
   if (!Number.isFinite(n)) return "—";
   const s = Math.round(n / 1000);
@@ -25,12 +23,10 @@ function msShort(n) {
   const sec = String(s % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
-// Format seconds as m:ss
-function secShort(n) {
-  const s = Math.round(Number(n) || 0);
-  const m = Math.floor(s / 60);
-  const sec = String(s % 60).padStart(2, "0");
-  return `${m}:${sec}`;
+// NEW: seconds formatter
+function sShort(n) {
+  if (!Number.isFinite(n)) return "—";
+  return `${Math.round(n)}s`;
 }
 
 export function StatCard({ title, value, sub }) {
@@ -83,17 +79,17 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                     <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Comments</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Shared</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Reported</th>
-                    <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Dwell</th>
+                    <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Dwell (s)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {perPost.map((p) => {
-                    // Prefer seconds if present; else fall back to ms
-                    const dwellSec =
-                      Number.isFinite(Number(p.dwell_s))
-                        ? Number(p.dwell_s)
-                        : Math.round((Number(p.dwell_ms) || 0) / 1000);
-
+                    // Accept dwell_s first; else convert ms→s as a fallback
+                    const dwellSeconds = Number.isFinite(p.dwell_s)
+                      ? Number(p.dwell_s)
+                      : Number.isFinite(p.dwell_ms)
+                        ? Number(p.dwell_ms) / 1000
+                        : 0;
                     return (
                       <tr key={p.post_id} style={{ borderBottom: "1px solid var(--line)" }}>
                         <td style={{ padding: ".35rem .25rem", fontFamily: "monospace" }}>{p.post_id}</td>
@@ -109,7 +105,7 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                         <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.comment_count ?? 0}</td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.shared ? "✓" : "—"}</td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reported ? "✓" : "—"}</td>
-                        <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{secShort(dwellSec)}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{sShort(dwellSeconds)}</td>
                       </tr>
                     );
                   })}
@@ -222,21 +218,24 @@ export function ParticipantsPanel({ feedId }) {
 
   const perPostList = useMemo(() => {
     if (!showPerPost || !summary?.perPost) return [];
-    return Object.entries(summary.perPost).map(([id, agg]) => ({
-      id,
-      reacted: agg.reacted,
-      expandable: agg.expandable ?? 0,
-      expanded: agg.expanded ?? 0,
-      expandRate: agg.expandRate,
-      commented: agg.commented,
-      shared: agg.shared,
-      reported: agg.reported,
-      // Prefer seconds; fallback to ms if summarizeRoster hasn't been updated yet
-      avgDwellSec:
-        Number.isFinite(Number(agg.avgDwellSec))
-          ? Number(agg.avgDwellSec)
-          : (Number.isFinite(Number(agg.avgDwellMs)) ? Math.round(Number(agg.avgDwellMs) / 1000) : null),
-    }));
+    return Object.entries(summary.perPost).map(([id, agg]) => {
+      // Prefer seconds if summarizeRoster provides avgDwellS; else convert ms→s
+      const avgDwellS =
+        Number.isFinite(agg?.avgDwellS) ? Number(agg.avgDwellS)
+        : Number.isFinite(agg?.avgDwellMs) ? Number(agg.avgDwellMs) / 1000
+        : null;
+      return {
+        id,
+        reacted: agg.reacted,
+        expandable: agg.expandable ?? 0,
+        expanded: agg.expanded ?? 0,
+        expandRate: agg.expandRate,
+        commented: agg.commented,
+        shared: agg.shared,
+        reported: agg.reported,
+        avgDwellS,
+      };
+    });
   }, [showPerPost, summary]);
 
   return (
@@ -299,7 +298,7 @@ export function ParticipantsPanel({ feedId }) {
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Commented</th>
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Shared</th>
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Reported</th>
-                <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Avg dwell</th>
+                <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Avg dwell (s)</th>
               </tr>
             </thead>
             <tbody>
@@ -315,9 +314,7 @@ export function ParticipantsPanel({ feedId }) {
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.commented)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.shared)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.reported)}</td>
-                  <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>
-                    {p.avgDwellSec == null ? "—" : secShort(p.avgDwellSec)}
-                  </td>
+                  <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.avgDwellS == null ? "—" : sShort(p.avgDwellS)}</td>
                 </tr>
               ))}
             </tbody>
@@ -363,21 +360,27 @@ export function ParticipantsPanel({ feedId }) {
                       className="btn ghost"
                       onClick={() => {
                         const perPostHash = extractPerPostFromRosterRow(r);
-                        const perPost = Object.entries(perPostHash).map(([post_id, agg]) => ({
-                          post_id,
-                          reacted: Number(agg.reacted) === 1,
-                          expandable: Number(agg.expandable) === 1,
-                          expanded: Number(agg.expanded) === 1,
-                          reaction_types: agg.reactions || agg.reaction_types || [],
-                          commented: Number(agg.commented) === 1,
-                          comment_count: Number(agg.comment_count || 0),
-                          shared: Number(agg.shared) === 1,
-                          reported: Number(agg.reported) === 1,
-                          // Prefer seconds if present; fallback to ms
-                          dwell_s: Number.isFinite(Number(agg.dwell_s))
+                        const perPost = Object.entries(perPostHash).map(([post_id, agg]) => {
+                          // Prefer dwell_s, else convert dwell_ms→s
+                          const dwell_s = Number.isFinite(agg?.dwell_s)
                             ? Number(agg.dwell_s)
-                            : Math.round((Number(agg.dwell_ms || agg.dwell || 0)) / 1000),
-                        }));
+                            : Number.isFinite(agg?.dwell_ms)
+                              ? Number(agg.dwell_ms) / 1000
+                              : 0;
+                          return {
+                            post_id,
+                            reacted: Number(agg.reacted) === 1,
+                            expandable: Number(agg.expandable) === 1,
+                            expanded: Number(agg.expanded) === 1,
+                            reaction_types: agg.reactions || agg.reaction_types || [],
+                            commented: Number(agg.commented) === 1,
+                            comment_count: Number(agg.comment_count || 0),
+                            shared: Number(agg.shared) === 1,
+                            reported: Number(agg.reported) === 1,
+                            dwell_s,
+                            dwell_ms: Number(agg.dwell_ms || 0), // kept only for back-compat display fallback
+                          };
+                        });
                         setDetailSubmission({
                           session_id: r.session_id,
                           participant_id: r.participant_id ?? null,
