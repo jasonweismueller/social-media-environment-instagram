@@ -640,8 +640,7 @@ export function buildMinimalHeader(posts) {
       `${id}_comment_texts`,
       `${id}_shared`,
       `${id}_reported_misinfo`,
-      // 👇 NEW
-      `${id}_dwell_ms`
+      `${id}_dwell_s`          // 👈 NEW: seconds, not ms
     );
   });
 
@@ -649,35 +648,40 @@ export function buildMinimalHeader(posts) {
 }
 
 // Sum total visible time per post based on view_start/view_end events
-export function computeDwellByPost(events) {
-  const open = new Map();   // post_id -> tStart
-  const total = new Map();  // post_id -> ms
+/** Collapse view_start/view_end pairs into total SECONDS per post (rounded). */
+export function computePostDwellSecondsFromEvents(events) {
+  const open = new Map();   // post_id -> tStart (ms)
+  const totalMs = new Map(); // post_id -> total milliseconds
 
   for (const e of events) {
-    const { action, post_id, ts_ms } = e || {};
-    if (!post_id || !ts_ms) continue;
+    if (!e || !e.action || !e.post_id) continue;
+    const { action, post_id, ts_ms } = e;
 
     if (action === "view_start") {
-      // Only set a start if not already open (guard duplicated starts)
       if (!open.has(post_id)) open.set(post_id, ts_ms);
     } else if (action === "view_end") {
       const t0 = open.get(post_id);
       if (t0 != null) {
-        const dur = Math.max(0, ts_ms - t0);
-        total.set(post_id, (total.get(post_id) || 0) + dur);
+        const dur = Math.max(0, (ts_ms ?? 0) - t0);
+        totalMs.set(post_id, (totalMs.get(post_id) || 0) + dur);
         open.delete(post_id);
       }
     }
   }
 
-  // If any views are still "open" at the end (no view_end fired), close them at the last ts
+  // flush any still-open intervals to the last timestamp we saw
   const lastTs = events.length ? events[events.length - 1].ts_ms : 0;
   for (const [post_id, t0] of open) {
     const dur = Math.max(0, lastTs - t0);
-    total.set(post_id, (total.get(post_id) || 0) + dur);
+    totalMs.set(post_id, (totalMs.get(post_id) || 0) + dur);
   }
 
-  return total; // Map(post_id -> total_ms)
+  // convert to whole seconds (rounded)
+  const totalSec = new Map();
+  for (const [post_id, ms] of totalMs) {
+    totalSec.set(post_id, Math.round(ms / 1000));
+  }
+  return totalSec; // Map(post_id -> seconds)
 }
 
 function isoToMs(iso) { try { return new Date(iso).getTime(); } catch { return null; } }

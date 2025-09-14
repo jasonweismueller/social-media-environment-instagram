@@ -9,6 +9,7 @@ import {
 } from "./utils";
 
 /* --------------------------- tiny helper + stat --------------------------- */
+// Format milliseconds as m:ss
 function ms(n) {
   if (n == null) return "—";
   const s = Math.round(n / 1000);
@@ -16,6 +17,7 @@ function ms(n) {
   const sec = String(s % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
+// Format milliseconds as m:ss (short)
 function msShort(n) {
   if (!Number.isFinite(n)) return "—";
   const s = Math.round(n / 1000);
@@ -23,6 +25,14 @@ function msShort(n) {
   const sec = String(s % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
+// Format seconds as m:ss
+function secShort(n) {
+  const s = Math.round(Number(n) || 0);
+  const m = Math.floor(s / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
 export function StatCard({ title, value, sub }) {
   return (
     <div className="card" style={{ padding: ".75rem 1rem" }}>
@@ -77,24 +87,32 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {perPost.map((p) => (
-                    <tr key={p.post_id} style={{ borderBottom: "1px solid var(--line)" }}>
-                      <td style={{ padding: ".35rem .25rem", fontFamily: "monospace" }}>{p.post_id}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reacted ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.expandable ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.expanded ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem" }}>
-                        {Array.isArray(p.reaction_types)
-                          ? (p.reaction_types.length ? p.reaction_types.join(", ") : "—")
-                          : (p.reaction_types || "—")}
-                      </td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.commented ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.comment_count ?? 0}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.shared ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reported ? "✓" : "—"}</td>
-                      <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{msShort(Number(p.dwell_ms || 0))}</td>
-                    </tr>
-                  ))}
+                  {perPost.map((p) => {
+                    // Prefer seconds if present; else fall back to ms
+                    const dwellSec =
+                      Number.isFinite(Number(p.dwell_s))
+                        ? Number(p.dwell_s)
+                        : Math.round((Number(p.dwell_ms) || 0) / 1000);
+
+                    return (
+                      <tr key={p.post_id} style={{ borderBottom: "1px solid var(--line)" }}>
+                        <td style={{ padding: ".35rem .25rem", fontFamily: "monospace" }}>{p.post_id}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reacted ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.expandable ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.expanded ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem" }}>
+                          {Array.isArray(p.reaction_types)
+                            ? (p.reaction_types.length ? p.reaction_types.join(", ") : "—")
+                            : (p.reaction_types || "—")}
+                        </td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.commented ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.comment_count ?? 0}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.shared ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reported ? "✓" : "—"}</td>
+                        <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{secShort(dwellSec)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -123,7 +141,7 @@ export function ParticipantsPanel({ feedId }) {
   const abortRef = useRef(null);
 
   // bump cache version so the UI refreshes with new fields
-  const mkCacheKey = (id) => `fb_participants_cache_v4::${id || "noid"}`;
+  const mkCacheKey = (id) => `fb_participants_cache_v5::${id || "noid"}`;
 
   const saveCache = React.useCallback((data) => {
     try { localStorage.setItem(mkCacheKey(feedId), JSON.stringify({ t: Date.now(), rows: data })); } catch {}
@@ -213,8 +231,11 @@ export function ParticipantsPanel({ feedId }) {
       commented: agg.commented,
       shared: agg.shared,
       reported: agg.reported,
-      // show if summarizeRoster provides dwell; otherwise null renders as —
-      avgDwellMs: agg.avgDwellMs ?? null,
+      // Prefer seconds; fallback to ms if summarizeRoster hasn't been updated yet
+      avgDwellSec:
+        Number.isFinite(Number(agg.avgDwellSec))
+          ? Number(agg.avgDwellSec)
+          : (Number.isFinite(Number(agg.avgDwellMs)) ? Math.round(Number(agg.avgDwellMs) / 1000) : null),
     }));
   }, [showPerPost, summary]);
 
@@ -294,7 +315,9 @@ export function ParticipantsPanel({ feedId }) {
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.commented)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.shared)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.reported)}</td>
-                  <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{msShort(p.avgDwellMs)}</td>
+                  <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>
+                    {p.avgDwellSec == null ? "—" : secShort(p.avgDwellSec)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -350,7 +373,10 @@ export function ParticipantsPanel({ feedId }) {
                           comment_count: Number(agg.comment_count || 0),
                           shared: Number(agg.shared) === 1,
                           reported: Number(agg.reported) === 1,
-                          dwell_ms: Number(agg.dwell_ms || agg.dwell || 0), // 👈 NEW
+                          // Prefer seconds if present; fallback to ms
+                          dwell_s: Number.isFinite(Number(agg.dwell_s))
+                            ? Number(agg.dwell_s)
+                            : Math.round((Number(agg.dwell_ms || agg.dwell || 0)) / 1000),
                         }));
                         setDetailSubmission({
                           session_id: r.session_id,

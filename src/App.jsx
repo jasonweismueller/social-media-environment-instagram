@@ -12,7 +12,8 @@ import {
 } from "./utils";
 
 // ⬇️ updated imports to use the split files
-import { Feed } from "./components-ui-posts";
+import { Feed as FBFeed } from "./components-ui-posts";
+import { IGFeed } from "./components-ui-instagram";
 import {
   ParticipantOverlay, ThankYouOverlay,
   RouteAwareTopbar, SkeletonFeed, LoadingOverlay,
@@ -20,6 +21,12 @@ import {
 
 import { AdminDashboard } from "./components-admin-core";
 import AdminLogin from "./components-admin-login";
+
+// ---- Mode detection (adds body class used by IG skeleton/styles)
+const MODE = (new URLSearchParams(location.search).get("style") || window.CONFIG?.STYLE || "fb").toLowerCase();
+if (typeof document !== "undefined") {
+  document.body.classList.toggle("ig-mode", MODE === "ig");
+}
 
 /** Read ?feed=... from the hash (e.g., #/?feed=cond_a) */
 function getFeedFromHash() {
@@ -162,7 +169,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // IntersectionObserver for per-post view dwell
+  // IntersectionObserver for per-post view dwell + pause on hidden/blur
   useEffect(() => {
     if (!hasEntered || loadingPosts || submitted || onAdmin) return;
 
@@ -187,9 +194,55 @@ export default function App() {
     }, { root: null, rootMargin: "0px", threshold: [0, 0.2, 0.5, 0.8, 1] });
 
     for (const [, el] of viewRefs.current) io.observe(el);
-    return () => io.disconnect();
+
+    // ---- Don't count background time
+    const inViewport = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.bottom > 0 && r.right > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
+    };
+
+    const pauseVisible = () => {
+      const ts = now();
+      for (const [postId, rec] of dwell.current) {
+        if (rec.visible) {
+          const dur = clamp(ts - rec.tStart, 0, 1000 * 60 * 60);
+          dwell.current.set(postId, { visible: false, tStart: 0, total: rec.total + dur });
+          log("view_end", { post_id: postId, duration_ms: dur, total_ms: rec.total + dur, reason: "page_hidden" });
+        }
+      }
+    };
+
+    const resumeIfVisible = () => {
+      const ts = now();
+      for (const [postId, el] of viewRefs.current) {
+        if (!el) continue;
+        const rec = dwell.current.get(postId) || { visible: false, tStart: 0, total: 0 };
+        if (!rec.visible && inViewport(el)) {
+          dwell.current.set(postId, { visible: true, tStart: ts, total: rec.total });
+          log("view_start", { post_id: postId, ratio: 1, reason: "page_visible" });
+        }
+      }
+    };
+
+    const onVis = () => (document.hidden ? pauseVisible() : resumeIfVisible());
+    const onBlur = pauseVisible;
+    const onFocus = resumeIfVisible;
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderedPosts, hasEntered, loadingPosts, submitted, onAdmin]);
+
+  const FeedComponent = MODE === "ig" ? IGFeed : FBFeed;
 
   return (
     <Router>
@@ -205,11 +258,12 @@ export default function App() {
             path="/"
             element={
               (hasEntered && !loadingPosts) ? (
-                <Feed
+                <FeedComponent
                   posts={orderedPosts}
                   registerViewRef={registerViewRef}
                   disabled={disabled}
                   log={log}
+                  // props below are ignored by IGFeed, ok to pass
                   showComposer={showComposer}
                   loading={loadingPosts}
                   onSubmit={async () => {
