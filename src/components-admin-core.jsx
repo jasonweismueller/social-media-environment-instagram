@@ -632,7 +632,7 @@ export function AdminDashboard({
                       }}
                     >
                       <option value="random">Random avatar</option>
-                      <option value="neutral">Neutral comic</option>
+                      <option value="neutral">Neutral avatar</option>
                       <option value="upload">Upload image</option>
                       <option value="url">Direct URL</option>
                     </select>
