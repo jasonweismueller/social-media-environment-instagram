@@ -25,7 +25,22 @@ import { randomAvatarByKind } from "./avatar-utils";
 // NEW: media fieldset split out
 import { MediaFieldset } from "./components-admin-media";
 
-
+/* -------- local helper: gender-neutral comic avatar (64px) ---------------- */
+function genNeutralAvatarDataUrl(size = 64) {
+  const s = size;
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="r"><rect x="0" y="0" width="32" height="32" rx="16" ry="16"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="32" height="32" fill="#e5e7eb"/>
+    <circle cx="16" cy="12.5" r="6" fill="#9ca3af"/>
+    <rect x="5" y="20" width="22" height="10" rx="5" fill="#9ca3af"/>
+  </g>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 /* ------------------------ Tiny admin stats fetcher ------------------------ */
 async function fetchParticipantsStats(feedId) {
@@ -43,7 +58,6 @@ async function fetchParticipantsStats(feedId) {
   }
 }
 
-
 function msToMinSec(n) {
   if (n == null) return "—";
   const s = Math.round(Number(n) / 1000);
@@ -51,7 +65,6 @@ function msToMinSec(n) {
   const sec = String(s % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
-
 
 /* ---------------------------- Posts local cache --------------------------- */
 function getCachedPosts(feedId, checksum) {
@@ -206,6 +219,7 @@ export function AdminDashboard({
       id: uid(),
       author: "",
       time: "Just now",
+      showTime: true,            // NEW
       text: "",
       links: [],
       badge: false,
@@ -239,7 +253,7 @@ export function AdminDashboard({
       adButtonText: "",
     });
   };
-  const openEdit = (p) => { setIsNew(false); setEditing({ ...p }); };
+  const openEdit = (p) => { setIsNew(false); setEditing({ ...p, showTime: p.showTime !== false }); };
 
   const removePost = (id) => {
     if (!confirm("Delete this post?")) return;
@@ -261,6 +275,10 @@ export function AdminDashboard({
       if (clean.avatarMode === "random" && clean.avatarRandomKind === "company") {
         clean.avatarUrl = randomAvatarByKind("company", clean.id || clean.author || "seed", clean.author || "");
       }
+      // NEW: neutral mode always generates data URL
+      if (clean.avatarMode === "neutral") {
+        clean.avatarUrl = genNeutralAvatarDataUrl(64);
+      }
 
       // Enforce mutual exclusivity: image OR video
       if (clean.videoMode !== "none") {
@@ -274,6 +292,9 @@ export function AdminDashboard({
 
       if (clean.imageMode === "none") clean.image = null;
       if (clean.imageMode === "random" && !clean.image) clean.image = randomSVG("Image");
+
+      // default showTime true if field missing
+      if (typeof clean.showTime === "undefined") clean.showTime = true;
 
       return idx === -1 ? [...arr, clean] : arr.map((p, i) => (i === idx ? clean : p));
     });
@@ -353,10 +374,10 @@ export function AdminDashboard({
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>{stats ? stats.total : "—"}</td>
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>{stats ? stats.submitted : "—"}</td>
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>
-  {stats && stats.avg_ms_enter_to_submit != null
-    ? msToMinSec(stats.avg_ms_enter_to_submit)
-    : "—"}
-</td>
+                        {stats && stats.avg_ms_enter_to_submit != null
+                          ? msToMinSec(stats.avg_ms_enter_to_submit)
+                          : "—"}
+                      </td>
 
                       <td style={{ padding: ".5rem .5rem" }}>
                         <div style={{ display:"flex", flexWrap:"wrap", gap:".4rem", alignItems:"center" }}>
@@ -495,7 +516,9 @@ export function AdminDashboard({
                     <div style={{ display:"flex", alignItems:"center", gap: ".35rem" }}>
                       <div style={{ fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.author}</div>
                       {p.badge && <span className="badge" aria-label="verified" />}
-                      <span className="subtle">· {p.time}</span>
+                      {p.showTime !== false && p.time ? (
+                        <span className="subtle">· {p.time}</span>
+                      ) : null}
                     </div>
 
                     <div className="subtle" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
@@ -509,9 +532,11 @@ export function AdminDashboard({
                       className="btn ghost"
                       onClick={() => setEditing({
                         ...p,
-                        avatarUrl: p.avatarMode === "random" && p.avatarRandomKind === "company"
-                          ? randomAvatarByKind("company", p.id || p.author || "seed", p.author || "")
-                          : p.avatarUrl
+                        showTime: p.showTime !== false,
+                        avatarUrl:
+                          p.avatarMode === "random" && p.avatarRandomKind === "company"
+                            ? randomAvatarByKind("company", p.id || p.author || "seed", p.author || "")
+                            : (p.avatarMode === "neutral" ? genNeutralAvatarDataUrl(64) : p.avatarUrl)
                       })}
                     >
                       Edit
@@ -556,7 +581,7 @@ export function AdminDashboard({
                       avatarUrl:
                         ed.avatarMode === "random" && ed.avatarRandomKind === "company"
                           ? randomAvatarByKind("company", ed.id || author || "seed", author || "")
-                          : ed.avatarUrl
+                          : (ed.avatarMode === "neutral" ? genNeutralAvatarDataUrl(64) : ed.avatarUrl)
                     }));
                   }}
                 />
@@ -570,6 +595,15 @@ export function AdminDashboard({
                 </label>
                 <label>Time
                   <input className="input" value={editing.time} onChange={(e) => setEditing({ ...editing, time: e.target.value })} />
+                  <div className="subtle" style={{ marginTop: 6 }}>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={editing.showTime !== false}
+                        onChange={(e) => setEditing({ ...editing, showTime: !!e.target.checked })}
+                      /> Show time
+                    </label>
+                  </div>
                 </label>
               </div>
               <label>Post text
@@ -589,6 +623,8 @@ export function AdminDashboard({
                         if (m === "random") {
                           const kind = editing.avatarRandomKind || "any";
                           url = randomAvatarByKind(kind, editing.id || editing.author || "seed", editing.author || "", randomAvatarUrl);
+                        } else if (m === "neutral") {
+                          url = genNeutralAvatarDataUrl(64);
                         }
                         if (m === "upload") url = "";
                         if (m === "url")    url = editing.avatarUrl || "";
@@ -596,6 +632,7 @@ export function AdminDashboard({
                       }}
                     >
                       <option value="random">Random avatar</option>
+                      <option value="neutral">Neutral comic</option>
                       <option value="upload">Upload image</option>
                       <option value="url">Direct URL</option>
                     </select>
@@ -788,10 +825,15 @@ export function AdminDashboard({
                   key={editing.id || "preview"}
                   post={{
                     ...editing,
+                    // pass neutral data URL when mode is neutral
                     avatarUrl:
-                      editing.avatarMode === "random" && !editing.avatarUrl
-                        ? randomAvatarByKind(editing.avatarRandomKind || "any", editing.id || editing.author || "seed", editing.author || "", randomAvatarUrl)
-                        : editing.avatarUrl,
+                      editing.avatarMode === "neutral"
+                        ? genNeutralAvatarDataUrl(64)
+                        : (editing.avatarMode === "random" && !editing.avatarUrl
+                            ? randomAvatarByKind(editing.avatarRandomKind || "any", editing.id || editing.author || "seed", editing.author || "", randomAvatarUrl)
+                            : editing.avatarUrl),
+                    // hide time in preview if toggled off (by blanking it)
+                    time: editing.showTime === false ? "" : editing.time,
                     image:
                       editing.imageMode === "random"
                         ? (editing.image || randomSVG("Image"))
@@ -872,7 +914,7 @@ function makeRandomPost() {
 
   return {
     id: uid(),
-    author, time, text, links: [],
+    author, time, showTime: true, text, links: [],
     badge: chance(0.15),
     avatarMode: "random",
     avatarRandomKind,

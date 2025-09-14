@@ -312,7 +312,9 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
               </>
             ) : (
               <>
-                <span>{post.time || "Just now"}</span>
+ {post.showTime !== false && post.time ? (
+   <span className="subtle">· {post.time}</span>
+ ) : null}
                 <span>·</span>
                 <IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
               </>
