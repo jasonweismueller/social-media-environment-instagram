@@ -13,7 +13,6 @@ import {
 
 // ⬇️ updated imports to use the split files
 import { Feed as FBFeed } from "./components-ui-posts";
-import { IGFeed } from "./components-ui-instagram";
 import {
   ParticipantOverlay, ThankYouOverlay,
   RouteAwareTopbar, SkeletonFeed, LoadingOverlay,
