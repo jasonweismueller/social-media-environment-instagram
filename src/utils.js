@@ -639,72 +639,174 @@ export function buildMinimalHeader(posts) {
       `${id}_commented`,
       `${id}_comment_texts`,
       `${id}_shared`,
-      `${id}_reported_misinfo`
+      `${id}_reported_misinfo`,
+      // 👇 NEW
+      `${id}_dwell_ms`
     );
   });
 
   return [...base, ...perPost];
 }
 
+// Sum total visible time per post based on view_start/view_end events
+export function computeDwellByPost(events) {
+  const open = new Map();   // post_id -> tStart
+  const total = new Map();  // post_id -> ms
+
+  for (const e of events) {
+    const { action, post_id, ts_ms } = e || {};
+    if (!post_id || !ts_ms) continue;
+
+    if (action === "view_start") {
+      // Only set a start if not already open (guard duplicated starts)
+      if (!open.has(post_id)) open.set(post_id, ts_ms);
+    } else if (action === "view_end") {
+      const t0 = open.get(post_id);
+      if (t0 != null) {
+        const dur = Math.max(0, ts_ms - t0);
+        total.set(post_id, (total.get(post_id) || 0) + dur);
+        open.delete(post_id);
+      }
+    }
+  }
+
+  // If any views are still "open" at the end (no view_end fired), close them at the last ts
+  const lastTs = events.length ? events[events.length - 1].ts_ms : 0;
+  for (const [post_id, t0] of open) {
+    const dur = Math.max(0, lastTs - t0);
+    total.set(post_id, (total.get(post_id) || 0) + dur);
+  }
+
+  return total; // Map(post_id -> total_ms)
+}
+
 function isoToMs(iso) { try { return new Date(iso).getTime(); } catch { return null; } }
 
-export function buildParticipantRow({ session_id, participant_id, events, posts, feed_id }) {
-  const byAction = (name) => events.filter(e => e.action === name);
-  const firstOf  = (name) => (byAction(name)[0] || null);
-  const lastBefore = (name, predicate = () => true) => {
-    const cutoff = firstOf(name);
-    if (!cutoff) return null;
-    const arr = events.filter(e =>
-      isoToMs(e.timestamp_iso) <= isoToMs(cutoff.timestamp_iso) && predicate(e)
-    );
-    return arr.length ? arr[arr.length - 1] : null;
+export function buildParticipantRow({
+  session_id,
+  participant_id,
+  events,
+  posts,
+  feed_id,
+  feed_checksum,
+}) {
+  // --- session timing
+  const entered = events.find(e => e.action === "participant_id_entered");
+  const submitted = events.find(e => e.action === "feed_submit");
+
+  const entered_at_iso = entered?.timestamp_iso || null;
+  const submitted_at_iso = submitted?.timestamp_iso || null;
+
+  const ms_enter_to_submit =
+    entered && submitted ? Math.max(0, submitted.ts_ms - entered.ts_ms) : null;
+
+  // last interaction after entering (non-scroll)
+  const nonScroll = events.filter(
+    e => e.action !== "scroll" && e.action !== "session_start" && e.action !== "session_end"
+  );
+  const lastInteractionAfterEnter = entered
+    ? nonScroll.filter(e => e.ts_ms >= entered.ts_ms).at(-1)
+    : nonScroll.at(-1);
+
+  const ms_enter_to_last_interaction =
+    entered && lastInteractionAfterEnter
+      ? Math.max(0, lastInteractionAfterEnter.ts_ms - entered.ts_ms)
+      : null;
+
+  // --- per-post aggregates
+  const dwellMap = computeDwellByPost(events); // Map(post_id -> ms)
+
+  // Helper trackers
+  const per = new Map();
+  const ensure = (id) => {
+    if (!per.has(id)) {
+      per.set(id, {
+        reacted: false,
+        reactions: 0,
+        expandable: false,
+        expanded: false,
+        commented: false,
+        comment_texts: [],
+        shared: false,
+        reported_misinfo: false,
+      });
+    }
+    return per.get(id);
   };
 
-  const entered   = firstOf("participant_id_entered");
-  const submitted = firstOf("feed_submit");
-  const enteredMs   = entered ? isoToMs(entered.timestamp_iso) : null;
-  const submittedMs = submitted ? isoToMs(submitted.timestamp_iso) : null;
-  const lastNonScrollPreSubmit = lastBefore("feed_submit",
-    (e) => e.action !== "scroll" && e.action !== "feed_submit"
-  );
+  for (const e of events) {
+    const { action, post_id } = e || {};
+    if (!post_id) continue;
+    const p = ensure(post_id);
 
+    switch (action) {
+      case "react_pick":
+        p.reacted = true;
+        p.reactions += 1;
+        break;
+      case "react_clear":
+        // keep reacted=true if they ever reacted; don't decrement reactions below 0
+        p.reactions = Math.max(0, p.reactions - 1);
+        break;
+      case "text_clamped":
+        p.expandable = true;
+        break;
+      case "expand_text":
+        p.expanded = true;
+        break;
+      case "comment_submit":
+        p.commented = true;
+        if (e.text) p.comment_texts.push(String(e.text));
+        break;
+      case "share":
+        p.shared = true;
+        break;
+      case "report_misinformation_click":
+        p.reported_misinfo = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  // --- build row
   const row = {
     session_id,
-    participant_id: participant_id || "",
-    entered_at_iso: entered?.timestamp_iso || "",
-    submitted_at_iso: submitted?.timestamp_iso || "",
-    ms_enter_to_submit:
-      (enteredMs != null && submittedMs != null) ? (submittedMs - enteredMs) : "",
-    ms_enter_to_last_interaction:
-      (enteredMs != null && lastNonScrollPreSubmit)
-        ? (isoToMs(lastNonScrollPreSubmit.timestamp_iso) - enteredMs)
-        : "",
-    feed_id: feed_id || "",
+    participant_id: participant_id || null,
+    entered_at_iso,
+    submitted_at_iso,
+    ms_enter_to_submit,
+    ms_enter_to_last_interaction,
+    feed_id: feed_id || null,
+    feed_checksum: feed_checksum || null,
   };
 
-  posts.forEach((p) => {
-    const postEvents = events.filter(e => e.post_id === p.id);
+  // Ensure every post has columns, even if untouched
+  for (const p of posts) {
+    const id = p.id || "unknown";
+    const agg = per.get(id) || {
+      reacted: false,
+      reactions: 0,
+      expandable: false,
+      expanded: false,
+      commented: false,
+      comment_texts: [],
+      shared: false,
+      reported_misinfo: false,
+    };
 
-    const lastReactionEvt = [...postEvents].reverse().find(e => e.action === "react_pick");
-    const lastReaction = lastReactionEvt && lastReactionEvt.type ? String(lastReactionEvt.type) : "";
+    row[`${id}_reacted`] = agg.reacted ? 1 : 0;
+    row[`${id}_reactions`] = agg.reactions || 0;
+    row[`${id}_expandable`] = agg.expandable ? 1 : 0;
+    row[`${id}_expanded`] = agg.expanded ? 1 : 0;
+    row[`${id}_commented`] = agg.commented ? 1 : 0;
+    row[`${id}_comment_texts`] = agg.comment_texts.join(" | ");
+    row[`${id}_shared`] = agg.shared ? 1 : 0;
+    row[`${id}_reported_misinfo`] = agg.reported_misinfo ? 1 : 0;
 
-    const commentedTexts = postEvents
-      .filter(e => e.action === "comment_submit")
-      .map(e => (e.text || "").trim())
-      .filter(Boolean);
-
-    const expanded   = postEvents.some(e => e.action === "expand_text");
-    const expandable = postEvents.some(e => e.action === "text_clamped");
-
-    row[`${p.id}_reacted`]          = lastReaction ? "1" : "0";
-    row[`${p.id}_reactions`]        = lastReaction;
-    row[`${p.id}_expandable`]       = expandable ? "1" : "0";
-    row[`${p.id}_expanded`]         = expanded ? "1" : "0";
-    row[`${p.id}_commented`]        = commentedTexts.length > 0 ? "1" : "0";
-    row[`${p.id}_comment_texts`]    = commentedTexts.join(" | ");
-    row[`${p.id}_shared`]           = postEvents.some(e => e.action === "share") ? "1" : "0";
-    row[`${p.id}_reported_misinfo`] = postEvents.some(e => e.action === "report_misinformation_click") ? "1" : "0";
-  });
+    // NEW: dwell
+    row[`${id}_dwell_ms`] = dwellMap.get(id) || 0;
+  }
 
   return row;
 }
