@@ -26,6 +26,7 @@ import { randomAvatarByKind } from "./avatar-utils";
 import { MediaFieldset } from "./components-admin-media";
 
 
+
 /* ------------------------ Tiny admin stats fetcher ------------------------ */
 async function fetchParticipantsStats(feedId) {
   try {
@@ -41,6 +42,16 @@ async function fetchParticipantsStats(feedId) {
     return null;
   }
 }
+
+
+function msToMinSec(n) {
+  if (n == null) return "—";
+  const s = Math.round(Number(n) / 1000);
+  const m = Math.floor(s / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
 
 /* ---------------------------- Posts local cache --------------------------- */
 function getCachedPosts(feedId, checksum) {
@@ -317,7 +328,7 @@ export function AdminDashboard({
                   <th style={{ padding: ".4rem .5rem", minWidth: 80 }}>Updated</th>
                   <th style={{ padding: ".4rem .5rem", textAlign: "center" }}>Total</th>
                   <th style={{ padding: ".4rem .5rem", textAlign: "center" }}>Submitted</th>
-                  <th style={{ padding: ".4rem .5rem", textAlign: "center"}}>Avg (ms)</th>
+                  <th style={{ padding: ".4rem .5rem", textAlign: "center"}}>Avg (m:ss)</th>
                   <th style={{ padding: ".4rem .5rem", minWidth: 420 }}>Actions</th>
                 </tr>
               </thead>
@@ -342,8 +353,10 @@ export function AdminDashboard({
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>{stats ? stats.total : "—"}</td>
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>{stats ? stats.submitted : "—"}</td>
                       <td style={{ padding: ".5rem .5rem", textAlign: "center" }}>
-                        {stats && stats.avg_ms_enter_to_submit != null ? stats.avg_ms_enter_to_submit : "—"}
-                      </td>
+  {stats && stats.avg_ms_enter_to_submit != null
+    ? msToMinSec(stats.avg_ms_enter_to_submit)
+    : "—"}
+</td>
 
                       <td style={{ padding: ".5rem .5rem" }}>
                         <div style={{ display:"flex", flexWrap:"wrap", gap:".4rem", alignItems:"center" }}>
