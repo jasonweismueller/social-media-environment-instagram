@@ -73,6 +73,7 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                     <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Comments</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Shared</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Reported</th>
+                    <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Dwell</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -91,6 +92,7 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                       <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.comment_count ?? 0}</td>
                       <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.shared ? "✓" : "—"}</td>
                       <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reported ? "✓" : "—"}</td>
+                      <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{msShort(Number(p.dwell_ms || 0))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -120,7 +122,8 @@ export function ParticipantsPanel({ feedId }) {
 
   const abortRef = useRef(null);
 
-  const mkCacheKey = (id) => `fb_participants_cache_v3::${id || "noid"}`;
+  // bump cache version so the UI refreshes with new fields
+  const mkCacheKey = (id) => `fb_participants_cache_v4::${id || "noid"}`;
 
   const saveCache = React.useCallback((data) => {
     try { localStorage.setItem(mkCacheKey(feedId), JSON.stringify({ t: Date.now(), rows: data })); } catch {}
@@ -210,6 +213,8 @@ export function ParticipantsPanel({ feedId }) {
       commented: agg.commented,
       shared: agg.shared,
       reported: agg.reported,
+      // show if summarizeRoster provides dwell; otherwise null renders as —
+      avgDwellMs: agg.avgDwellMs ?? null,
     }));
   }, [showPerPost, summary]);
 
@@ -273,6 +278,7 @@ export function ParticipantsPanel({ feedId }) {
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Commented</th>
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Shared</th>
                 <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Reported</th>
+                <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Avg dwell</th>
               </tr>
             </thead>
             <tbody>
@@ -288,6 +294,7 @@ export function ParticipantsPanel({ feedId }) {
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.commented)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.shared)}</td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{nfCompact.format(p.reported)}</td>
+                  <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{msShort(p.avgDwellMs)}</td>
                 </tr>
               ))}
             </tbody>
@@ -343,6 +350,7 @@ export function ParticipantsPanel({ feedId }) {
                           comment_count: Number(agg.comment_count || 0),
                           shared: Number(agg.shared) === 1,
                           reported: Number(agg.reported) === 1,
+                          dwell_ms: Number(agg.dwell_ms || agg.dwell || 0), // 👈 NEW
                         }));
                         setDetailSubmission({
                           session_id: r.session_id,
