@@ -21,7 +21,7 @@ import {
 import { AdminDashboard } from "./components-admin-core";
 import AdminLogin from "./components-admin-login";
 
-// ---- Mode detection (adds body class used by IG skeleton/styles)
+// ---- Mode flag (kept harmless; no IG component is loaded)
 const MODE = (new URLSearchParams(location.search).get("style") || window.CONFIG?.STYLE || "fb").toLowerCase();
 if (typeof document !== "undefined") {
   document.body.classList.toggle("ig-mode", MODE === "ig");
@@ -194,7 +194,6 @@ export default function App() {
 
     for (const [, el] of viewRefs.current) io.observe(el);
 
-    // ---- Don't count background time
     const inViewport = (el) => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
@@ -241,7 +240,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderedPosts, hasEntered, loadingPosts, submitted, onAdmin]);
 
-  const FeedComponent = MODE === "ig" ? IGFeed : FBFeed;
+  // ✅ Always use the FB feed (no IG component reference)
+  const FeedComponent = FBFeed;
 
   return (
     <Router>
@@ -262,7 +262,6 @@ export default function App() {
                   registerViewRef={registerViewRef}
                   disabled={disabled}
                   log={log}
-                  // props below are ignored by IGFeed, ok to pass
                   showComposer={showComposer}
                   loading={loadingPosts}
                   onSubmit={async () => {
