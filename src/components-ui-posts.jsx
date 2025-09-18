@@ -634,7 +634,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                 src={u}
                 poster={post.videoPosterUrl || undefined}
                 playsInline
-                muted={isMuted}
+                muted={true} 
                 autoPlay={inView}
                 preload="auto"
                 loop={!!post.videoLoop}
