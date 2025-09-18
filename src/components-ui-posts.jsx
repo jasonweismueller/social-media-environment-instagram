@@ -49,23 +49,44 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
   const OPEN_DELAY = 400;
   const CLOSE_DELAY = 250;
+  const SUPPRESS_MS = 300;
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const openTimer  = useRef(null);
   const closeTimer = useRef(null);
+  const suppressHoverUntil = useRef(0);
+
+  useEffect(() => {
+  return () => {
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+  };
+}, []);
 
   // in-view detector for media
   const { wrapRef, inView } = useInViewAutoplay(0.6);
 
   const scheduleOpen = () => {
-    clearTimeout(openTimer.current);
-    clearTimeout(closeTimer.current);
-    openTimer.current = setTimeout(() => setFlyoutOpen(true), OPEN_DELAY);
-  };
+  if (Date.now() < suppressHoverUntil.current) return; // suppress hover reopen
+  clearTimeout(openTimer.current);
+  clearTimeout(closeTimer.current);
+  openTimer.current = setTimeout(() => {
+    if (Date.now() < suppressHoverUntil.current) return;
+    setFlyoutOpen(true);
+  }, OPEN_DELAY);
+};
   const scheduleClose = () => {
-    clearTimeout(openTimer.current);
-    clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setFlyoutOpen(false), CLOSE_DELAY);
-  };
+  clearTimeout(openTimer.current);
+  clearTimeout(closeTimer.current);
+  closeTimer.current = setTimeout(() => setFlyoutOpen(false), CLOSE_DELAY);
+};
+
+// close NOW + suppress hover for a bit
+const closeNowAndSuppress = () => {
+  clearTimeout(openTimer.current);
+  clearTimeout(closeTimer.current);
+  setFlyoutOpen(false);
+  suppressHoverUntil.current = Date.now() + SUPPRESS_MS;
+};
 
   const showReactions = post.showReactions ?? false;
   const ALL_RX_KEYS = useMemo(() => Object.keys(REACTION_META), []);
@@ -117,18 +138,20 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   }), [post, displayedCommentCount, displayedShareCount, totalReactions]);
 
   const onLike = () => {
-    setMyReaction(prev => {
-      if (prev == null) { click("react_pick", { type: "like", prev: null }); return "like"; }
-      click("react_clear", { type: prev, prev }); return null;
-    });
-  };
+  closeNowAndSuppress();           // also suppress when toggling like
+  setMyReaction(prev => {
+    if (prev == null) { click("react_pick", { type: "like", prev: null }); return "like"; }
+    click("react_clear", { type: prev, prev }); return null;
+  });
+};
   const onPickReaction = (key) => {
-    setFlyoutOpen(false);
-    setMyReaction(prev => {
-      if (prev === key) { click("react_clear", { type: key, prev }); return null; }
-      click("react_pick", { type: key, prev }); return key;
-    });
-  };
+  setMyReaction(prev => {
+    if (prev === key) { click("react_clear", { type: key, prev }); return null; }
+    click("react_pick", { type: key, prev }); return key;
+  });
+  // close AFTER the state update has been queued
+  closeNowAndSuppress();
+};
 
   const onShare = () => {
     if (hasShared) return; // only once
@@ -236,6 +259,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
         }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
+        onPointerDown={closeNowAndSuppress}
         aria-haspopup="true"
         aria-expanded={open}
         aria-label={label}
@@ -312,11 +336,13 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
               </>
             ) : (
               <>
- {post.showTime !== false && post.time ? (
-   <span className="subtle">· {post.time}</span>
- ) : null}
-                <span>·</span>
-                <IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
+{post.showTime !== false && post.time ? (
+  <>
+    <span className="subtle">{post.time}</span>
+    <span aria-hidden="true">·</span>
+  </>
+) : null}
+<IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
               </>
             )}
           </div>
@@ -677,7 +703,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                     label={displayedCommentCount === 1 ? "comment" : "comments"}
                   />
                 )}
-                {hasComments && hasShares && <span aria-hidden="true">·</span>}
                 {hasShares && (
                   <NamesPeek
                     post={postForCounts}
@@ -694,23 +719,31 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
       <footer className="footer">
         <div className="actions">
-          <div className="like-wrap" onMouseEnter={scheduleOpen} onMouseLeave={scheduleClose}>
+          <div
+  className="like-wrap"
+  onMouseEnter={scheduleOpen}
+  onMouseLeave={() => {
+    scheduleClose();
+    suppressHoverUntil.current = 0; // reset so hover can work again
+  }}
+>
             <ActionBtn label={likeLabel} active={!!myReaction} onClick={onLike} Icon={LikeIcon} disabled={disabled} />
             {flyoutOpen && (
-              <div
-                className="react-flyout"
-                role="menu"
-                aria-label="Pick a reaction"
-                onMouseEnter={scheduleOpen}
-                onMouseLeave={scheduleClose}
-              >
-                {Object.entries(ALL_REACTIONS).map(([key, emoji]) => (
-                  <button key={key} aria-label={key} onClick={() => onPickReaction(key)} title={key}>
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
+  <div
+    className="react-flyout"
+    role="menu"
+    aria-label="Pick a reaction"
+    onMouseEnter={scheduleOpen}
+    onMouseLeave={scheduleClose}
+      
+  >
+    {Object.entries(ALL_REACTIONS).map(([key, emoji]) => (
+      <button key={key} aria-label={key} onClick={() => onPickReaction(key)} title={key}>
+        {emoji}
+      </button>
+    ))}
+  </div>
+)}
           </div>
 
           <ActionBtn label="Comment" onClick={onOpenComment} Icon={IconComment} disabled={disabled} />
