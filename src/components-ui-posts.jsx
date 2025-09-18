@@ -36,6 +36,11 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [showComment, setShowComment] = useState(false);
   const [commentText, setCommentText] = useState("");
 
+  // FB-like video settings UI
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+
   // Participant comment (this session)
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
   const [participantComments, setParticipantComments] = useState(mySubmittedComment ? 1 : 0);
@@ -56,37 +61,37 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const suppressHoverUntil = useRef(0);
 
   useEffect(() => {
-  return () => {
-    clearTimeout(openTimer.current);
-    clearTimeout(closeTimer.current);
-  };
-}, []);
+    return () => {
+      clearTimeout(openTimer.current);
+      clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   // in-view detector for media
   const { wrapRef, inView } = useInViewAutoplay(0.6);
 
   const scheduleOpen = () => {
-  if (Date.now() < suppressHoverUntil.current) return; // suppress hover reopen
-  clearTimeout(openTimer.current);
-  clearTimeout(closeTimer.current);
-  openTimer.current = setTimeout(() => {
-    if (Date.now() < suppressHoverUntil.current) return;
-    setFlyoutOpen(true);
-  }, OPEN_DELAY);
-};
+    if (Date.now() < suppressHoverUntil.current) return; // suppress hover reopen
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+    openTimer.current = setTimeout(() => {
+      if (Date.now() < suppressHoverUntil.current) return;
+      setFlyoutOpen(true);
+    }, OPEN_DELAY);
+  };
   const scheduleClose = () => {
-  clearTimeout(openTimer.current);
-  clearTimeout(closeTimer.current);
-  closeTimer.current = setTimeout(() => setFlyoutOpen(false), CLOSE_DELAY);
-};
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setFlyoutOpen(false), CLOSE_DELAY);
+  };
 
-// close NOW + suppress hover for a bit
-const closeNowAndSuppress = () => {
-  clearTimeout(openTimer.current);
-  clearTimeout(closeTimer.current);
-  setFlyoutOpen(false);
-  suppressHoverUntil.current = Date.now() + SUPPRESS_MS;
-};
+  // close NOW + suppress hover for a bit
+  const closeNowAndSuppress = () => {
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+    setFlyoutOpen(false);
+    suppressHoverUntil.current = Date.now() + SUPPRESS_MS;
+  };
 
   const showReactions = post.showReactions ?? false;
   const ALL_RX_KEYS = useMemo(() => Object.keys(REACTION_META), []);
@@ -138,20 +143,20 @@ const closeNowAndSuppress = () => {
   }), [post, displayedCommentCount, displayedShareCount, totalReactions]);
 
   const onLike = () => {
-  closeNowAndSuppress();           // also suppress when toggling like
-  setMyReaction(prev => {
-    if (prev == null) { click("react_pick", { type: "like", prev: null }); return "like"; }
-    click("react_clear", { type: prev, prev }); return null;
-  });
-};
+    closeNowAndSuppress();           // also suppress when toggling like
+    setMyReaction(prev => {
+      if (prev == null) { click("react_pick", { type: "like", prev: null }); return "like"; }
+      click("react_clear", { type: prev, prev }); return null;
+    });
+  };
   const onPickReaction = (key) => {
-  setMyReaction(prev => {
-    if (prev === key) { click("react_clear", { type: key, prev }); return null; }
-    click("react_pick", { type: key, prev }); return key;
-  });
-  // close AFTER the state update has been queued
-  closeNowAndSuppress();
-};
+    setMyReaction(prev => {
+      if (prev === key) { click("react_clear", { type: key, prev }); return null; }
+      click("react_pick", { type: key, prev }); return key;
+    });
+    // close AFTER the state update has been queued
+    closeNowAndSuppress();
+  };
 
   const onShare = () => {
     if (hasShared) return; // only once
@@ -206,6 +211,48 @@ const closeNowAndSuppress = () => {
     setIsVideoPlaying(false);
     click("video_ended");
   };
+
+  // Settings helpers
+  const setRate = (r) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.playbackRate = r;
+    setPlaybackRate(r);
+    setSettingsOpen(false);
+    click("video_rate_change", { rate: r });
+  };
+
+  const toggleFullscreen = () => {
+    // Prefer the actual video element like FB
+    const el = videoRef.current;
+    if (!el) return;
+    const doc = document;
+    const isFull =
+      doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+    if (isFull) {
+      (doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen)?.call(doc);
+      click("video_fullscreen_exit");
+    } else {
+      (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen)?.call(el);
+      click("video_fullscreen_enter");
+    }
+  };
+
+  // Close settings on outside click / Esc
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDocClick = (e) => {
+      if (!settingsRef.current) return;
+      if (!settingsRef.current.contains(e.target)) setSettingsOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === "Escape") setSettingsOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (!reportAck) return;
@@ -304,6 +351,63 @@ const closeNowAndSuppress = () => {
   // --- GHOST SHOW/HIDE RULES ---
   const shouldShowGhosts = showReactions && baseCommentCount > 0;
 
+  // Inline styles for FB-like controls (no external CSS needed)
+  const fb = {
+    controls: {
+      position: "absolute",
+      left: 0, right: 0, bottom: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 8px",
+      background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 100%)",
+      color: "#fff",
+      zIndex: 2,
+      pointerEvents: "none" // allow underlying video clicks except on buttons
+    },
+    btn: {
+      border: 0,
+      background: "rgba(0,0,0,.45)",
+      color: "#fff",
+      width: 32,
+      height: 28,
+      borderRadius: 6,
+      display: "grid",
+      placeItems: "center",
+      cursor: "pointer",
+      fontSize: 14,
+      lineHeight: 1,
+      pointerEvents: "auto"
+    },
+    spacer: { flex: 1 },
+    settingsWrap: { position: "relative", pointerEvents: "auto" },
+    menu: {
+      position: "absolute",
+      bottom: "110%",
+      right: 0,
+      background: "#111827",
+      color: "#fff",
+      border: "1px solid rgba(255,255,255,.12)",
+      borderRadius: 8,
+      boxShadow: "0 10px 24px rgba(0,0,0,.35)",
+      padding: 6,
+      minWidth: 120,
+      zIndex: 3
+    },
+    menuBtn: (active) => ({
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      border: 0,
+      background: active ? "rgba(255,255,255,.08)" : "transparent",
+      color: "#fff",
+      padding: "6px 8px",
+      borderRadius: 6,
+      cursor: "pointer",
+      fontSize: 13
+    }),
+  };
+
   return (
     <article ref={registerViewRef(post.id)} className="card">
       <header className="card-head">
@@ -326,23 +430,23 @@ const closeNowAndSuppress = () => {
             {post.badge && <span className="badge"><IconBadge /></span>}
           </div>
 
-        {/* Sponsored for ads; otherwise time + globe */}
+          {/* Sponsored for ads; otherwise time + globe */}
           <div className="meta" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             {post.adType === "ad" ? (
               <>
-                <span>Sponsored</span>
-                <span>·</span>
+                <span className="subtle">Sponsored</span>
+                <span className="sep" aria-hidden="true">·</span>
                 <IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
               </>
             ) : (
               <>
-{post.showTime !== false && post.time ? (
-  <>
-    <span className="subtle">{post.time}</span>
-    <span aria-hidden="true">·</span>
-  </>
-) : null}
-<IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
+                {post.showTime !== false && post.time ? (
+                  <>
+                    <span className="subtle">{post.time}</span>
+                    <span className="sep" aria-hidden="true">·</span>
+                  </>
+                ) : null}
+                <IconGlobe style={{ color: "var(--muted)", width: 14, height: 14, flexShrink: 0 }} />
               </>
             )}
           </div>
@@ -496,7 +600,7 @@ const closeNowAndSuppress = () => {
           if (isDrive && driveId) {
             // Drive preview player (autoplay not guaranteed)
             return (
-                <div className="video-wrap drive-embed" ref={wrapRef}>
+              <div className="video-wrap drive-embed" ref={wrapRef}>
                 <iframe
                   src={`https://drive.google.com/file/d/${driveId}/preview`}
                   title="Drive video"
@@ -518,35 +622,102 @@ const closeNowAndSuppress = () => {
 
           // Non-Drive (e.g., S3/CloudFront) → native <video> w/ in-view autoplay
           return (
-            <div className="video-wrap" ref={wrapRef}>
-  <video
-    ref={videoRef}
-    className="video-el"
-    src={u}
-    poster={post.videoPosterUrl || undefined}
-    playsInline
-    muted={isMuted}
-    autoPlay={inView}
-    preload="auto"
-    loop={!!post.videoLoop}
-    onPlay={() => setIsVideoPlaying(true)}
-    onPause={() => setIsVideoPlaying(false)}
-    onEnded={onVideoEnded}
-    controls={!!post.videoShowControls}
-    disablePictureInPicture
-    controlsList="nodownload noremoteplayback"
-  />
-  {!post.videoShowControls && (
-    <>
-      <button type="button" className="video-center-btn" onClick={onVideoTogglePlay} disabled={disabled}>
-        {isVideoPlaying ? "❚❚" : "▶"}
-      </button>
-      <button type="button" className="video-mute-btn" onClick={onVideoToggleMute} disabled={disabled}>
-        {isMuted ? "🔇" : "🔊"}
-      </button>
-    </>
-  )}
-</div>
+            <div
+              className="video-wrap"
+              ref={wrapRef}
+              onMouseEnter={() => setSettingsOpen(false)}
+              style={{ position: "relative" }} // ensure absolute controls anchor
+            >
+              <video
+                ref={videoRef}
+                className="video-el"
+                src={u}
+                poster={post.videoPosterUrl || undefined}
+                playsInline
+                muted={isMuted}
+                autoPlay={inView}
+                preload="auto"
+                loop={!!post.videoLoop}
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+                onEnded={onVideoEnded}
+                controls={!!post.videoShowControls}
+                disablePictureInPicture
+                controlsList="nodownload noremoteplayback"
+              />
+
+              {/* FB-like bottom control bar (shown when using custom controls) */}
+              {!post.videoShowControls && (
+                <div style={fb.controls}>
+                  <button
+                    type="button"
+                    style={fb.btn}
+                    onClick={onVideoTogglePlay}
+                    aria-label={isVideoPlaying ? "Pause" : "Play"}
+                    title={isVideoPlaying ? "Pause" : "Play"}
+                    disabled={disabled}
+                  >
+                    {isVideoPlaying ? "❚❚" : "▶"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={fb.btn}
+                    onClick={onVideoToggleMute}
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    title={isMuted ? "Unmute" : "Mute"}
+                    disabled={disabled}
+                  >
+                    {isMuted ? "🔇" : "🔊"}
+                  </button>
+
+                  <div style={fb.spacer} />
+
+                  <div style={fb.settingsWrap} ref={settingsRef}>
+                    <button
+                      type="button"
+                      style={fb.btn}
+                      aria-haspopup="menu"
+                      aria-expanded={settingsOpen}
+                      onClick={() => setSettingsOpen(o => !o)}
+                      title="Settings"
+                      disabled={disabled}
+                    >
+                      ⚙
+                    </button>
+
+                    {settingsOpen && (
+                      <div style={fb.menu} role="menu">
+                        {[0.5, 1, 1.25, 1.5].map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            role="menuitem"
+                            style={fb.menuBtn(r === playbackRate)}
+                            onClick={() => setRate(r)}
+                            title={`${r}×`}
+                            disabled={disabled}
+                          >
+                            {r}× {r === playbackRate ? "✓" : ""}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    style={fb.btn}
+                    onClick={toggleFullscreen}
+                    aria-label="Fullscreen"
+                    title="Fullscreen"
+                    disabled={disabled}
+                  >
+                    ⛶
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })()
       ) : post.image && post.imageMode !== "none" ? (
@@ -720,30 +891,29 @@ const closeNowAndSuppress = () => {
       <footer className="footer">
         <div className="actions">
           <div
-  className="like-wrap"
-  onMouseEnter={scheduleOpen}
-  onMouseLeave={() => {
-    scheduleClose();
-    suppressHoverUntil.current = 0; // reset so hover can work again
-  }}
->
+            className="like-wrap"
+            onMouseEnter={scheduleOpen}
+            onMouseLeave={() => {
+              scheduleClose();
+              suppressHoverUntil.current = 0; // reset so hover can work again
+            }}
+          >
             <ActionBtn label={likeLabel} active={!!myReaction} onClick={onLike} Icon={LikeIcon} disabled={disabled} />
             {flyoutOpen && (
-  <div
-    className="react-flyout"
-    role="menu"
-    aria-label="Pick a reaction"
-    onMouseEnter={scheduleOpen}
-    onMouseLeave={scheduleClose}
-      
-  >
-    {Object.entries(ALL_REACTIONS).map(([key, emoji]) => (
-      <button key={key} aria-label={key} onClick={() => onPickReaction(key)} title={key}>
-        {emoji}
-      </button>
-    ))}
-  </div>
-)}
+              <div
+                className="react-flyout"
+                role="menu"
+                aria-label="Pick a reaction"
+                onMouseEnter={scheduleOpen}
+                onMouseLeave={scheduleClose}
+              >
+                {Object.entries(ALL_REACTIONS).map(([key, emoji]) => (
+                  <button key={key} aria-label={key} onClick={() => onPickReaction(key)} title={key}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <ActionBtn label="Comment" onClick={onOpenComment} Icon={IconComment} disabled={disabled} />

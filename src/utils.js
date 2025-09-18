@@ -633,14 +633,15 @@ export function buildMinimalHeader(posts) {
     const id = p.id || "unknown";
     perPost.push(
       `${id}_reacted`,
-      `${id}_reactions`,
+      `${id}_reaction_types`, // ← NEW: spelled-out reactions (CSV)
+      `${id}_reactions`,      // ← kept for backward-compat: count
       `${id}_expandable`,
       `${id}_expanded`,
       `${id}_commented`,
       `${id}_comment_texts`,
       `${id}_shared`,
       `${id}_reported_misinfo`,
-      `${id}_dwell_s`          // 👈 NEW: seconds, not ms
+      `${id}_dwell_s`
     );
   });
 
@@ -718,7 +719,6 @@ export function buildParticipantRow({
       : null;
 
   // --- per-post aggregates
-  // Use the helper that already converts to SECONDS and accounts for tab visibility.
   const dwellSecMap = computePostDwellSecondsFromEvents(events); // Map(post_id -> seconds)
 
   // Helper trackers
@@ -726,8 +726,8 @@ export function buildParticipantRow({
   const ensure = (id) => {
     if (!per.has(id)) {
       per.set(id, {
-        reacted: false,
-        reactions: 0,
+        // reactions now tracked as spelled-out types (array)
+        reaction_types: [],
         expandable: false,
         expanded: false,
         commented: false,
@@ -739,19 +739,27 @@ export function buildParticipantRow({
     return per.get(id);
   };
 
+  // Track reactions using event payloads (components-ui-posts sends { type, prev })
   for (const e of events) {
     const { action, post_id } = e || {};
     if (!post_id) continue;
     const p = ensure(post_id);
 
     switch (action) {
-      case "react_pick":
-        p.reacted = true;
-        p.reactions += 1;
+      case "react_pick": {
+        const t = (e.type || "").trim();
+        // default to "like" if type missing
+        p.reaction_types.push(t || "like");
         break;
-      case "react_clear":
-        p.reactions = Math.max(0, p.reactions - 1);
+      }
+      case "react_clear": {
+        // remove one instance of the specific type if present (from the end)
+        const t = (e.type || "").trim() || "like";
+        for (let i = p.reaction_types.length - 1; i >= 0; i--) {
+          if (p.reaction_types[i] === t) { p.reaction_types.splice(i, 1); break; }
+        }
         break;
+      }
       case "text_clamped":
         p.expandable = true;
         break;
@@ -789,8 +797,7 @@ export function buildParticipantRow({
   for (const p of posts) {
     const id = p.id || "unknown";
     const agg = per.get(id) || {
-      reacted: false,
-      reactions: 0,
+      reaction_types: [],
       expandable: false,
       expanded: false,
       commented: false,
@@ -799,8 +806,17 @@ export function buildParticipantRow({
       reported_misinfo: false,
     };
 
-    row[`${id}_reacted`] = agg.reacted ? 1 : 0;
-    row[`${id}_reactions`] = agg.reactions || 0;
+    // reacted flag derived from whether any reaction types were logged
+    const reacted = agg.reaction_types.length > 0 ? 1 : 0;
+
+    row[`${id}_reacted`] = reacted;
+
+    // NEW: spelled-out reaction names (CSV)
+    row[`${id}_reaction_types`] = agg.reaction_types.join(", ");
+
+    // kept: numeric count (back-compat)
+    row[`${id}_reactions`] = agg.reaction_types.length;
+
     row[`${id}_expandable`] = agg.expandable ? 1 : 0;
     row[`${id}_expanded`] = agg.expanded ? 1 : 0;
     row[`${id}_commented`] = agg.commented ? 1 : 0;
@@ -808,7 +824,7 @@ export function buildParticipantRow({
     row[`${id}_shared`] = agg.shared ? 1 : 0;
     row[`${id}_reported_misinfo`] = agg.reported_misinfo ? 1 : 0;
 
-    // NEW: dwell in SECONDS
+    // dwell in SECONDS (preferred)
     row[`${id}_dwell_s`] = dwellSecMap.get(id) ?? 0;
   }
 

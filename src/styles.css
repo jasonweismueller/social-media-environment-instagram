@@ -58,7 +58,11 @@ a:hover{text-decoration:underline}
 
 .name{font-weight:600}
 .name-row{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
-.meta{font-size:.75rem;color:var(--muted)}
+/* meta text sizing + alignment */
+.meta { font-size: .75rem; }        /* already present; keep */
+.meta .subtle { font-size: inherit; }  /* <- add this so time/Sponsored match */
+.meta .sep { line-height: 1; display: inline-block; transform: translateY(-1px); } /* tidy baseline */
+
 .dots{border:none;background:transparent;padding:.25rem .4rem;border-radius:999px;cursor:pointer;color:#6b7280}
 .dots:hover{background:#f3f4f6}
 
@@ -662,3 +666,72 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   z-index: 2;                             /* over the video */
 }
 .video-mute-btn { z-index: 2; }
+
+/* kill rounded corners on videos */
+.video-wrap,
+.video-el {
+  border-radius: 0 !important;
+}
+
+/* FB-like video control bar */
+.fb-controls{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  height:40px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:0 8px;
+  /* subtle dark gradient like FB */
+  background: linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0));
+  opacity:0;
+  transition: opacity .15s ease;
+  pointer-events:none;               /* bar is inert unless visible */
+}
+.video-wrap:hover .fb-controls{ opacity:1; pointer-events:auto; }
+
+.fb-btn{
+  border:0;
+  background:transparent;
+  color:#fff;
+  font-size:14px;
+  height:28px;
+  min-width:28px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:6px;
+  cursor:pointer;
+}
+.fb-btn:hover{ background: rgba(255,255,255,.12); }
+
+.fb-spacer{ flex:1; }
+
+/* settings popover */
+.fb-settings{ position:relative; }
+.fb-settings-menu{
+  position:absolute;
+  bottom: 36px;            /* float above the bar */
+  right: 0;
+  background:#111827;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  padding:6px;
+  box-shadow:0 8px 28px rgba(0,0,0,.25);
+  min-width:120px;
+  z-index:5;
+}
+.fb-settings-item{
+  width:100%;
+  text-align:left;
+  border:0;
+  background:transparent;
+  color:#fff;
+  padding:6px 8px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13px;
+}
+.fb-settings-item:hover{ background: rgba(255,255,255,.08); }
+.fb-settings-item.active{ background: rgba(255,255,255,.16); }
