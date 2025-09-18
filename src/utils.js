@@ -820,7 +820,10 @@ export function buildParticipantRow({
     row[`${id}_expandable`] = agg.expandable ? 1 : 0;
     row[`${id}_expanded`] = agg.expanded ? 1 : 0;
     row[`${id}_commented`] = agg.commented ? 1 : 0;
-    row[`${id}_comment_texts`] = agg.comment_texts.join(" | ");
+     // ⬇️ write an em dash when there are no comments (instead of empty → "0")
+    row[`${id}_comment_texts`] = agg.comment_texts.length
+      ? agg.comment_texts.join(" | ")
+      : "—";
     row[`${id}_shared`] = agg.shared ? 1 : 0;
     row[`${id}_reported_misinfo`] = agg.reported_misinfo ? 1 : 0;
 
