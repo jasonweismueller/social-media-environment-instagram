@@ -634,7 +634,7 @@ export function buildMinimalHeader(posts) {
     perPost.push(
       `${id}_reacted`,
       `${id}_reactions`,        // compat: numeric (blank if 0)
-      `${id}_reaction_type`,    // NEW: spelled-out ("like", "care", …)
+      `${id}_reaction_type`,    // spelled-out ("like", "care", …)
       `${id}_expandable`,
       `${id}_expanded`,
       `${id}_commented`,        // boolean (blank if false)
@@ -745,7 +745,6 @@ export function buildParticipantRow({
         p.reaction_type = (e.type || "").trim() || "like";
         break;
       case "react_clear":
-        // only clear if the clear matches current type; otherwise leave as-is
         if (!e.type || (p.reaction_type && p.reaction_type === e.type)) {
           p.reaction_type = "";
         }
@@ -796,22 +795,22 @@ export function buildParticipantRow({
 
     // REACTIONS
     const reactedFlag = agg.reaction_type ? 1 : 0;
-    row[`${id}_reacted`] = reactedFlag ? 1 : "";     // blank when false → shows "—"
-    row[`${id}_reactions`] = reactedFlag ? 1 : "";   // compat numeric (blank when 0)
-    row[`${id}_reaction_type`] = agg.reaction_type;  // spelled-out or ""
+    row[`${id}_reacted`]       = reactedFlag ? 1 : "";   // blank → UI shows "—"
+    row[`${id}_reactions`]     = reactedFlag ? 1 : "";   // compat numeric (blank when 0)
+    row[`${id}_reaction_type`] = agg.reaction_type;      // spelled-out or ""
 
     // EXPAND/COMMENTS/SHARE/REPORT
     row[`${id}_expandable`] = agg.expandable ? 1 : "";
     row[`${id}_expanded`]   = agg.expanded ? 1 : "";
 
-    row[`${id}_commented`] = agg.commented ? 1 : ""; // ← blank when false (shows "—")
+    row[`${id}_commented`] = agg.commented ? 1 : "";     // ✓/— in UI
 
     row[`${id}_comment_texts`] = agg.comment_texts.length
       ? agg.comment_texts.join(" | ")
-      : "—";                                         // keep your em dash for “no text”
+      : "—";                                             // em dash for “no text”
 
-    row[`${id}_shared`] = agg.shared ? 1 : "";
-    row[`${id}_reported_misinfo`] = agg.reported_misinfo ? 1 : "";
+    row[`${id}_shared`]            = agg.shared ? 1 : "";
+    row[`${id}_reported_misinfo`]  = agg.reported_misinfo ? 1 : "";
 
     // DWELL
     row[`${id}_dwell_s`] = dwellSecMap.get(id) ?? 0;
@@ -866,7 +865,7 @@ export function extractPerPostFromRosterRow(row) {
           // reactions
           reactions: rxArr,
           reaction_types: rxArr,
-          reaction_type: rxArr[0] || "",
+          reaction_type: (agg?.reaction_type || rxArr[0] || "").trim(),
 
           // comments
           comment_text: cText,
@@ -876,6 +875,42 @@ export function extractPerPostFromRosterRow(row) {
           dwell_s,
         };
       }
+
+      // ⬇️ Overlay flat columns if present (prefer explicit flat values)
+      for (const [key, val] of Object.entries(row)) {
+        // *_commented → overwrite boolean
+        let m = /^(.+?)_commented$/.exec(key);
+        if (m) {
+          const id = m[1];
+          if (!clean[id]) clean[id] = {};
+          clean[id].commented = Number(val || 0);
+          continue;
+        }
+        // *_comment_texts → attach the actual text (also flips commented)
+        m = /^(.+?)_comment_texts$/.exec(key);
+        if (m) {
+          const id = m[1];
+          if (!clean[id]) clean[id] = {};
+          const text = String(val || "").trim();
+          clean[id].comment_text = text;
+          if (text) {
+            clean[id].commented = 1;
+            clean[id].comment_count = clean[id].comment_count || 1;
+          }
+        }
+        // spelled-out single reaction from flat columns (if provided)
+        m = /^(.+?)_reaction_type$/.exec(key);
+        if (m) {
+          const id = m[1];
+          if (!clean[id]) clean[id] = {};
+          const t = String(val || "").trim();
+          clean[id].reaction_type = t;
+          clean[id].reactions = t ? [t] : [];
+          clean[id].reaction_types = clean[id].reactions;
+          if (t) clean[id].reacted = 1;
+        }
+      }
+
       return clean;
     } catch {
       /* fall through to flat-columns parsing */
@@ -955,7 +990,6 @@ export function extractPerPostFromRosterRow(row) {
         const text = String(val || "").trim();
         obj.comment_text = text;
         obj.commented = obj.commented || (text ? 1 : 0);
-        // keep count for compatibility (1 if text exists)
         obj.comment_count = obj.comment_count || (text ? 1 : 0);
         continue;
       }
