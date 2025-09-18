@@ -183,7 +183,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const videoRef = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   // default to admin flag; fallback to muted true (helps autoplay)
-  const [isMuted, setIsMuted] = useState(post.videoAutoplayMuted !== false);
+  const [isMuted, setIsMuted] = useState(true);
 
   const onVideoTogglePlay = async () => {
     const v = videoRef.current;
