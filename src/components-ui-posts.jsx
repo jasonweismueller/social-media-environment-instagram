@@ -702,22 +702,34 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
               style={fb.wrap}
             >
               <video
-                ref={videoRef}
-                className="video-el"
-                src={u}
-                poster={post.videoPosterUrl || undefined}
-                playsInline
-                muted={true}
-                autoPlay={inView}
-                preload="auto"
-                loop={!!post.videoLoop}
-                onPlay={() => setIsVideoPlaying(true)}
-                onPause={() => setIsVideoPlaying(false)}
-                onEnded={onVideoEnded}
-                controls={!!post.videoShowControls}
-                disablePictureInPicture
-                controlsList="nodownload noremoteplayback"
-                style={{ display: "block", width: "100%", height: "auto", background: "#000" }}
+      ref={videoRef}
+      className="video-el"
+      src={u}
+      poster={post.videoPosterUrl || undefined}
+      playsInline
+      muted={true}
+      autoPlay={inView}
+      preload="auto"
+      loop={!!post.videoLoop}
+      onPlay={() => setIsVideoPlaying(true)}
+      onPause={() => setIsVideoPlaying(false)}
+      onEnded={onVideoEnded}
+      controls={!!post.videoShowControls}
+      disablePictureInPicture
+      controlsList="nodownload noremoteplayback"
+
+      // 🚫 don't force width:100%
+      // ✅ keep aspect, center, cap height; vertical videos won’t stretch
+      style={{
+        display: "block",
+        width: "auto",
+        height: "auto",
+        maxWidth: "100%",
+        maxHeight: "min(78vh, 600px)",
+        objectFit: "contain",
+        background: "#000",
+        margin: "0 auto",
+      }}
               />
 
               {/* FB-like bottom bar when using custom controls */}
