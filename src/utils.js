@@ -838,14 +838,18 @@ export function extractPerPostFromRosterRow(row) {
           : [];
 
         // comment text (string); prefer explicit text, else join array
-        const cText = (() => {
-          const t = agg?.comment_text ?? agg?.comment ?? null;
-          const arr = agg?.comment_texts;
-          if (typeof t === "string") return t.trim();
-          if (Array.isArray(arr)) return arr.map(String).join(" | ");
-          if (typeof arr === "string") return arr;
-          return "";
-        })();
+        const cTextRaw = (() => {
+  const t = agg?.comment_text ?? agg?.comment ?? null;
+  const arr = agg?.comment_texts;
+  if (typeof t === "string") return t;
+  if (Array.isArray(arr)) return arr.map(String).join(" | ");
+  if (typeof arr === "string") return arr;
+  return "";
+})();
+const cText = (() => {
+  const s = String(cTextRaw || "").trim();
+  return (!s || s === "—" || s === "-" || /^[-—\s]+$/.test(s)) ? "" : s;
+})();
 
         // dwell seconds preferred; else convert ms → s
         const dwell_s = Number.isFinite(agg?.dwell_s)
@@ -982,30 +986,22 @@ export function extractPerPostFromRosterRow(row) {
     }
 
     // comment TEXT (preferred for participant detail UI)
-    {
-      const ct = /^(.+?)_comment_texts$/.exec(key);
-      if (ct) {
-        const [, postId] = ct;
-        const obj = ensure(postId);
-        const text = String(val || "").trim();
-        obj.comment_text = text;
-        obj.commented = obj.commented || (text ? 1 : 0);
-        obj.comment_count = obj.comment_count || (text ? 1 : 0);
-        continue;
-      }
-    }
+{
+  const ct = /^(.+?)_comment_texts$/.exec(key);
+  if (ct) {
+    const [, postId] = ct;
+    const obj = ensure(postId);
 
-    // legacy comment count
-    {
-      const c = /^(.+?)_comment_count$/.exec(key);
-      if (c) {
-        const [, postId] = c;
-        const obj = ensure(postId);
-        obj.comment_count = Number(val || 0);
-        obj.commented = obj.commented || (obj.comment_count > 0 ? 1 : 0);
-        continue;
-      }
-    }
+    // normalize: treat em dashes, hyphens, and whitespace as "no comment"
+    const raw = String(val || "").trim();
+    const text = (!raw || raw === "—" || raw === "-" || /^[-—\s]+$/.test(raw)) ? "" : raw;
+
+    obj.comment_text = text;
+    obj.commented = obj.commented || (text ? 1 : 0);
+    obj.comment_count = obj.comment_count || (text ? 1 : 0);
+    continue;
+  }
+}
 
     // dwell (s then ms→s)
     {

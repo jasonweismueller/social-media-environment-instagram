@@ -141,7 +141,7 @@ export function ParticipantsPanel({ feedId }) {
   const abortRef = useRef(null);
 
   // bump cache version so the UI refreshes with new fields
-  const mkCacheKey = (id) => `fb_participants_cache_v6::${id || "noid"}`;
+  const mkCacheKey = (id) => `fb_participants_cache_v7::${id || "noid"}`;
 
   const saveCache = React.useCallback((data) => {
     try { localStorage.setItem(mkCacheKey(feedId), JSON.stringify({ t: Date.now(), rows: data })); } catch {}
@@ -446,20 +446,17 @@ export function ParticipantsPanel({ feedId }) {
       : 0;
 
   return {
-    post_id,
-    reacted: Number(agg.reacted) === 1,
-    expandable: Number(agg.expandable) === 1,
-    expanded: Number(agg.expanded) === 1,
-    reaction_types: agg.reactions || agg.reaction_types || [],
-    reaction_type: agg.reaction_type || (agg.reactions?.[0] ?? ""), // ← add this
-    commented: Number(agg.commented) === 1
-      ? true
-      : !!String(agg.comment_text || "").trim(),
-    comment_text: String(agg.comment_text || "").trim(),
-    shared: Number(agg.shared) === 1,
-    reported: Number(agg.reported) === 1,
-    dwell_s,
-  };
+  post_id,
+  reacted: Number(agg.reacted) === 1,
+  expandable: Number(agg.expandable) === 1,
+  expanded: Number(agg.expanded) === 1,
+  reaction_types: agg.reactions || agg.reaction_types || [],
+  commented: Number(agg.commented) === 1 ? true : hasRealText,
+  comment_text: hasRealText ? rawText : "",
+  shared: Number(agg.shared) === 1,
+  reported: Number(agg.reported) === 1,
+  dwell_s,
+};
 });
                         setDetailSubmission({
                           session_id: r.session_id,
