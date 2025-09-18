@@ -76,7 +76,7 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Expanded</th>
                     <th style={{ textAlign: "left",  padding: ".4rem .25rem" }}>Reaction(s)</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Commented</th>
-                    <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Comments</th>
+                    <th style={{ textAlign: "left",  padding: ".4rem .25rem" }}>Comment</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Shared</th>
                     <th style={{ textAlign: "center",padding: ".4rem .25rem" }}>Reported</th>
                     <th style={{ textAlign: "right", padding: ".4rem .25rem" }}>Dwell (s)</th>
@@ -102,7 +102,9 @@ export function ParticipantDetailModal({ open, onClose, submission }) {
                             : (p.reaction_types || "—")}
                         </td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.commented ? "✓" : "—"}</td>
-                        <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{p.comment_count ?? 0}</td>
+                        <td style={{ padding: ".35rem .25rem" }}>
+  {p.comment_text && p.comment_text.trim() ? p.comment_text : "—"}
+</td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.shared ? "✓" : "—"}</td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "center" }}>{p.reported ? "✓" : "—"}</td>
                         <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>{sShort(dwellSeconds)}</td>
@@ -411,24 +413,25 @@ export function ParticipantsPanel({ feedId }) {
                       onClick={() => {
                         const perPostHash = extractPerPostFromRosterRow(r);
                         const perPost = Object.entries(perPostHash).map(([post_id, agg]) => {
-                          const dwell_s = Number.isFinite(agg?.dwell_s)
-                            ? Number(agg.dwell_s)
-                            : Number.isFinite(agg?.dwell_ms)
-                              ? Number(agg.dwell_ms) / 1000
-                              : 0;
-                          return {
-                            post_id,
-                            reacted: Number(agg.reacted) === 1,
-                            expandable: Number(agg.expandable) === 1,
-                            expanded: Number(agg.expanded) === 1,
-                            reaction_types: agg.reactions || agg.reaction_types || [],
-                            commented: Number(agg.commented) === 1,
-                            comment_count: Number(agg.comment_count || 0),
-                            shared: Number(agg.shared) === 1,
-                            reported: Number(agg.reported) === 1,
-                            dwell_s,
-                          };
-                        });
+  const dwell_s = Number.isFinite(agg?.dwell_s)
+    ? Number(agg.dwell_s)
+    : Number.isFinite(agg?.dwell_ms)
+      ? Number(agg.dwell_ms) / 1000
+      : 0;
+
+  return {
+    post_id,
+    reacted: Number(agg.reacted) === 1,
+    expandable: Number(agg.expandable) === 1,
+    expanded: Number(agg.expanded) === 1,
+    reaction_types: agg.reactions || agg.reaction_types || [],
+    commented: Number(agg.commented) === 1,
+    comment_text: String(agg.comment_text || "").trim(),   // ← use text
+    shared: Number(agg.shared) === 1,
+    reported: Number(agg.reported) === 1,
+    dwell_s,
+  };
+});
                         setDetailSubmission({
                           session_id: r.session_id,
                           participant_id: r.participant_id ?? null,

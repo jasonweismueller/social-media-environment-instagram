@@ -824,6 +824,65 @@ export function buildParticipantRow({
 export function extractPerPostFromRosterRow(row) {
   if (!row || typeof row !== "object") return {};
 
+  // If backend returns a JSON blob, parse it first
+  const blob = row.per_post_json || row.per_post || row.perPostJson || null;
+  if (blob) {
+    try {
+      const parsed = typeof blob === "string" ? JSON.parse(blob) : blob;
+      const clean = {};
+      for (const [id, agg] of Object.entries(parsed || {})) {
+        const rx = agg?.reactions || agg?.reaction_types || [];
+        const rxArr = Array.isArray(rx)
+          ? rx
+          : typeof rx === "string"
+          ? rx.split(",").map(s => s.trim()).filter(Boolean)
+          : [];
+
+        // comment text (string); prefer explicit text, else join array
+        const cText = (() => {
+          const t = agg?.comment_text ?? agg?.comment ?? null;
+          const arr = agg?.comment_texts;
+          if (typeof t === "string") return t.trim();
+          if (Array.isArray(arr)) return arr.map(String).join(" | ");
+          if (typeof arr === "string") return arr;
+          return "";
+        })();
+
+        // dwell seconds preferred; else convert ms → s
+        const dwell_s = Number.isFinite(agg?.dwell_s)
+          ? Number(agg.dwell_s)
+          : Number.isFinite(agg?.dwell_ms)
+          ? Math.round(Number(agg.dwell_ms) / 1000)
+          : 0;
+
+        clean[id] = {
+          reacted: Number(agg?.reacted || (rxArr.length ? 1 : 0)),
+          commented: Number(agg?.commented || (cText ? 1 : 0) || (Number(agg?.comment_count) > 0 ? 1 : 0)),
+          shared: Number(agg?.shared || 0),
+          reported: Number(agg?.reported ?? agg?.reported_misinfo ?? 0),
+          expandable: Number(agg?.expandable || 0),
+          expanded: Number(agg?.expanded || 0),
+
+          // reactions
+          reactions: rxArr,
+          reaction_types: rxArr,
+          reaction_type: rxArr[0] || "",
+
+          // comments
+          comment_text: cText,
+          comment_count: Number(agg?.comment_count || (cText ? 1 : 0)),
+
+          // dwell
+          dwell_s,
+        };
+      }
+      return clean;
+    } catch {
+      /* fall through to flat-columns parsing */
+    }
+  }
+
+  // Otherwise parse flat columns
   const out = {};
   const ensure = (id) => {
     if (!out[id]) {
@@ -831,7 +890,7 @@ export function extractPerPostFromRosterRow(row) {
         reacted: 0, commented: 0, shared: 0, reported: 0,
         expandable: 0, expanded: 0,
         reactions: [], reaction_types: [], reaction_type: "",
-        comment_count: 0,
+        comment_text: "", comment_count: 0,
         dwell_s: 0,
       };
     }
@@ -839,7 +898,7 @@ export function extractPerPostFromRosterRow(row) {
   };
 
   for (const [key, val] of Object.entries(row)) {
-    // booleans-as-numbers (blank → 0 is fine)
+    // booleans (as numbers/blanks)
     {
       const m = /^(.+?)_(reacted|commented|shared|reported_misinfo|expanded|expandable)$/.exec(key);
       if (m) {
@@ -854,7 +913,7 @@ export function extractPerPostFromRosterRow(row) {
       }
     }
 
-    // NEW: single spelled-out reaction
+    // spelled-out single reaction
     {
       const r1 = /^(.+?)_reaction_type$/.exec(key);
       if (r1) {
@@ -864,12 +923,12 @@ export function extractPerPostFromRosterRow(row) {
         obj.reaction_type = t;
         obj.reactions = t ? [t] : [];
         obj.reaction_types = obj.reactions;
-        obj.reacted = obj.reactions.length ? 1 : 0;
+        obj.reacted = obj.reacted || (t ? 1 : 0);
         continue;
       }
     }
 
-    // Legacy list (still supported)
+    // legacy reactions list
     {
       const r2 = /^(.+?)_(reactions|reaction_types)$/.exec(key);
       if (r2) {
@@ -881,13 +940,40 @@ export function extractPerPostFromRosterRow(row) {
           .filter(Boolean);
         obj.reactions = arr;
         obj.reaction_types = arr;
-        obj.reaction_type = arr[0] || "";
+        obj.reaction_type = obj.reaction_type || (arr[0] || "");
         obj.reacted = obj.reacted || (arr.length ? 1 : 0);
         continue;
       }
     }
 
-    // dwell_s (preferred) and dwell_ms (fallback)
+    // comment TEXT (preferred for participant detail UI)
+    {
+      const ct = /^(.+?)_comment_texts$/.exec(key);
+      if (ct) {
+        const [, postId] = ct;
+        const obj = ensure(postId);
+        const text = String(val || "").trim();
+        obj.comment_text = text;
+        obj.commented = obj.commented || (text ? 1 : 0);
+        // keep count for compatibility (1 if text exists)
+        obj.comment_count = obj.comment_count || (text ? 1 : 0);
+        continue;
+      }
+    }
+
+    // legacy comment count
+    {
+      const c = /^(.+?)_comment_count$/.exec(key);
+      if (c) {
+        const [, postId] = c;
+        const obj = ensure(postId);
+        obj.comment_count = Number(val || 0);
+        obj.commented = obj.commented || (obj.comment_count > 0 ? 1 : 0);
+        continue;
+      }
+    }
+
+    // dwell (s then ms→s)
     {
       const ds = /^(.+?)_dwell_s$/.exec(key);
       if (ds) { const [, postId] = ds; ensure(postId).dwell_s = Number(val || 0); continue; }
@@ -895,7 +981,6 @@ export function extractPerPostFromRosterRow(row) {
       if (dm) { const [, postId] = dm; const o = ensure(postId); if (!o.dwell_s) o.dwell_s = Math.round(Number(val || 0) / 1000); continue; }
     }
   }
-
   return out;
 }
 
