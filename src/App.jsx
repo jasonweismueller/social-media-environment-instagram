@@ -1,4 +1,4 @@
-// App.jsx
+/// App.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import "./styles.css";

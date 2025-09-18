@@ -549,7 +549,7 @@ export function fileToDataURL(file) {
 
 // utils.js
 
-/**
+/***
  * Upload a File/Blob to S3 using your local signer (AWS SDK v2).
  * Returns the public file URL to save on the post (post.video.url).
  *

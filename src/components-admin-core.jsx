@@ -42,7 +42,7 @@ function genNeutralAvatarDataUrl(size = 64) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-/* ------------------------ Tiny admin stats fetcher ------------------------ */
+/* ------------------------ Tiny admin stats fetcher ------------------------- */
 async function fetchParticipantsStats(feedId) {
   try {
     const base = window.CONFIG?.API_BASE;

@@ -51,7 +51,7 @@ export function MediaFieldset({
           </select>
         </label>
 
-        {/* IMAGE controls */}
+        {/* Image controls */}
         {editing.videoMode === "none" && editing.imageMode !== "none" && (
           <>
             <div className="grid-2">
