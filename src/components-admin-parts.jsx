@@ -444,17 +444,20 @@ export function ParticipantsPanel({ feedId }) {
       : 0;
 
   return {
-    post_id,
-    reacted: Number(agg.reacted) === 1,
-    expandable: Number(agg.expandable) === 1,
-    expanded: Number(agg.expanded) === 1,
-    reaction_types: agg.reactions || agg.reaction_types || [],
-    commented: Number(agg.commented) === 1,
-    comment_text: String(agg.comment_text || "").trim(),   // ← use text
-    shared: Number(agg.shared) === 1,
-    reported: Number(agg.reported) === 1,
-    dwell_s,
-  };
+  post_id,
+  reacted: Number(agg.reacted) === 1,
+  expandable: Number(agg.expandable) === 1,
+  expanded: Number(agg.expanded) === 1,
+  reaction_types: agg.reactions || agg.reaction_types || [],
+  // prefer explicit flag; if missing, fall back to non-empty text
+  commented: Number(agg.commented) === 1 
+    ? true 
+    : !!String(agg.comment_text || "").trim(),
+  comment_text: String(agg.comment_text || "").trim(),
+  shared: Number(agg.shared) === 1,
+  reported: Number(agg.reported) === 1,
+  dwell_s,
+};
 });
                         setDetailSubmission({
                           session_id: r.session_id,
