@@ -435,41 +435,52 @@ export function ParticipantsPanel({ feedId }) {
                   </td>
                   <td style={{ padding: ".35rem .25rem", textAlign: "right" }}>
                     <button
-                      className="btn ghost"
-                      onClick={() => {
-                        const perPostHash = extractPerPostFromRosterRow(r);
-                        const perPost = Object.entries(perPostHash).map(([post_id, agg]) => {
-  const dwell_s = Number.isFinite(agg?.dwell_s)
-    ? Number(agg.dwell_s)
-    : Number.isFinite(agg?.dwell_ms)
-      ? Number(agg.dwell_ms) / 1000
-      : 0;
+  className="btn ghost"
+  onClick={() => {
+    try {
+      const perPostHash = extractPerPostFromRosterRow(r) || {};
+      const perPost = Object.entries(perPostHash).map(([post_id, agg]) => {
+        // seconds (fallback from ms)
+        const dwell_s = Number.isFinite(agg?.dwell_s)
+          ? Number(agg.dwell_s)
+          : Number.isFinite(agg?.dwell_ms)
+            ? Number(agg.dwell_ms) / 1000
+            : 0;
 
-  return {
-  post_id,
-  reacted: Number(agg.reacted) === 1,
-  expandable: Number(agg.expandable) === 1,
-  expanded: Number(agg.expanded) === 1,
-  reaction_types: agg.reactions || agg.reaction_types || [],
-  commented: Number(agg.commented) === 1 ? true : hasRealText,
-  comment_text: hasRealText ? rawText : "",
-  shared: Number(agg.shared) === 1,
-  reported: Number(agg.reported) === 1,
-  dwell_s,
-};
-});
-                        setDetailSubmission({
-                          session_id: r.session_id,
-                          participant_id: r.participant_id ?? null,
-                          submitted_at_iso: r.submitted_at_iso ?? null,
-                          ms_enter_to_submit: r.ms_enter_to_submit ?? null,
-                          perPost,
-                        });
-                        setDetailOpen(true);
-                      }}
-                    >
-                      Details
-                    </button>
+        // “real” comment = not empty, not dash
+        const rawComment = String(agg.comment_text || "").trim();
+        const hasRealComment = !!(rawComment && !/^[-—\s]+$/.test(rawComment));
+
+        return {
+          post_id,
+          reacted: Number(agg.reacted) === 1,
+          expandable: Number(agg.expandable) === 1,
+          expanded: Number(agg.expanded) === 1,
+          reaction_types: agg.reactions || agg.reaction_types || [],
+          commented: Number(agg.commented) === 1 ? true : hasRealComment,
+          comment_text: rawComment,
+          shared: Number(agg.shared) === 1,
+          reported: Number(agg.reported) === 1,
+          dwell_s,
+        };
+      });
+
+      setDetailSubmission({
+        session_id: r.session_id,
+        participant_id: r.participant_id ?? null,
+        submitted_at_iso: r.submitted_at_iso ?? null,
+        ms_enter_to_submit: r.ms_enter_to_submit ?? null,
+        perPost,
+      });
+      setDetailOpen(true);
+    } catch (err) {
+      console.error("Participant Details build failed:", err, r);
+      alert("Failed to open details (see console for error).");
+    }
+  }}
+>
+  Details
+</button>
                   </td>
                 </tr>
               ))}

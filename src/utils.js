@@ -987,12 +987,14 @@ const cText = (() => {
 
     // comment TEXT (preferred for participant detail UI)
 {
+  // comment TEXT (preferred for participant detail UI)
+{
   const ct = /^(.+?)_comment_texts$/.exec(key);
   if (ct) {
     const [, postId] = ct;
     const obj = ensure(postId);
 
-    // normalize: treat em dashes, hyphens, and whitespace as "no comment"
+    // treat em dashes, hyphens, and whitespace as "no comment"
     const raw = String(val || "").trim();
     const text = (!raw || raw === "—" || raw === "-" || /^[-—\s]+$/.test(raw)) ? "" : raw;
 
@@ -1001,6 +1003,7 @@ const cText = (() => {
     obj.comment_count = obj.comment_count || (text ? 1 : 0);
     continue;
   }
+}
 }
 
     // dwell (s then ms→s)
