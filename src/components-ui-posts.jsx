@@ -179,11 +179,52 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   // media (image/video)
   const onImageOpen = () => { if (post.image) click("image_open", { alt: post.image.alt || "" }); };
 
-  // --- VIDEO SUPPORT
+  // --- VIDEO SUPPORT (FB-like UI) -----------------------------------------
   const videoRef = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  // default to admin flag; fallback to muted true (helps autoplay)
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(true); // start muted (reliable autoplay)
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
+
+  // time formatter
+  const fmtTime = (s) => {
+    if (!Number.isFinite(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = String(Math.floor(s % 60)).padStart(2, "0");
+    return `${m}:${sec}`;
+  };
+
+  // wire native video events
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true; // ensure element starts muted
+
+    const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onTime = () => setCurrent(v.currentTime || 0);
+    const onProg = () => {
+      try {
+        const b = v.buffered;
+        if (b.length) setBufferedEnd(b.end(b.length - 1));
+      } catch {}
+    };
+    const onPlay = () => setIsVideoPlaying(true);
+    const onPause = () => setIsVideoPlaying(false);
+
+    v.addEventListener("loadedmetadata", onLoadedMeta);
+    v.addEventListener("timeupdate", onTime);
+    v.addEventListener("progress", onProg);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoadedMeta);
+      v.removeEventListener("timeupdate", onTime);
+      v.removeEventListener("progress", onProg);
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+    };
+  }, []);
 
   const onVideoTogglePlay = async () => {
     const v = videoRef.current;
@@ -191,15 +232,14 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
     try {
       if (v.paused) {
         await v.play();
-        setIsVideoPlaying(true);
         click("video_play");
       } else {
         v.pause();
-        setIsVideoPlaying(false);
         click("video_pause");
       }
     } catch { /* ignore */ }
   };
+
   const onVideoToggleMute = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -207,12 +247,12 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
     setIsMuted(v.muted);
     click(v.muted ? "video_mute" : "video_unmute");
   };
+
   const onVideoEnded = () => {
     setIsVideoPlaying(false);
     click("video_ended");
   };
 
-  // Settings helpers
   const setRate = (r) => {
     const v = videoRef.current;
     if (!v) return;
@@ -223,7 +263,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   };
 
   const toggleFullscreen = () => {
-    // Prefer the actual video element like FB
     const el = videoRef.current;
     if (!el) return;
     const doc = document;
@@ -236,6 +275,18 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
       (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen)?.call(el);
       click("video_fullscreen_enter");
     }
+  };
+
+  // progress bar interactions
+  const seekTo = (time) => {
+    const v = videoRef.current;
+    if (!v || !Number.isFinite(time)) return;
+    v.currentTime = Math.max(0, Math.min(time, v.duration || time));
+  };
+  const handleBarClick = (e) => {
+    const bar = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - bar.left) / bar.width));
+    seekTo(pct * (duration || 0));
   };
 
   // Close settings on outside click / Esc
@@ -353,18 +404,38 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
   // Inline styles for FB-like controls (no external CSS needed)
   const fb = {
-    controls: {
-      position: "absolute",
-      left: 0, right: 0, bottom: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "6px 8px",
-      background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 100%)",
+    wrap: { position: "relative" },
+    bottom: {
+      position: "absolute", left: 0, right: 0, bottom: 0,
+      padding: "8px 10px",
       color: "#fff",
       zIndex: 2,
-      pointerEvents: "none" // allow underlying video clicks except on buttons
+      pointerEvents: "none",
+      display: "grid",
+      gap: 6,
+      background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 100%)",
     },
+    progress: {
+      position: "relative",
+      height: 6,
+      borderRadius: 999,
+      background: "rgba(255,255,255,.25)",
+      cursor: "pointer",
+      overflow: "hidden",
+      pointerEvents: "auto"
+    },
+    progBuffered: (pct) => ({
+      position: "absolute", top: 0, left: 0, bottom: 0,
+      width: `${pct}%`,
+      background: "rgba(255,255,255,.35)"
+    }),
+    progPlayed: (pct) => ({
+      position: "absolute", top: 0, left: 0, bottom: 0,
+      width: `${pct}%`,
+      background: "#fff"
+    }),
+    row: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+    time: { fontSize: 12, fontWeight: 600, textShadow: "0 1px 2px rgba(0,0,0,.5)" },
     btn: {
       border: 0,
       background: "rgba(0,0,0,.45)",
@@ -379,7 +450,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
       lineHeight: 1,
       pointerEvents: "auto"
     },
-    spacer: { flex: 1 },
     settingsWrap: { position: "relative", pointerEvents: "auto" },
     menu: {
       position: "absolute",
@@ -621,12 +691,15 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
           }
 
           // Non-Drive (e.g., S3/CloudFront) → native <video> w/ in-view autoplay
+          const playedPct   = duration ? Math.min(current / duration, 1) * 100 : 0;
+          const bufferedPct = duration ? Math.min(bufferedEnd / duration, 1) * 100 : 0;
+
           return (
             <div
               className="video-wrap"
               ref={wrapRef}
               onMouseEnter={() => setSettingsOpen(false)}
-              style={{ position: "relative" }} // ensure absolute controls anchor
+              style={fb.wrap}
             >
               <video
                 ref={videoRef}
@@ -634,7 +707,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                 src={u}
                 poster={post.videoPosterUrl || undefined}
                 playsInline
-                muted={true} 
+                muted={true}
                 autoPlay={inView}
                 preload="auto"
                 loop={!!post.videoLoop}
@@ -644,77 +717,105 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                 controls={!!post.videoShowControls}
                 disablePictureInPicture
                 controlsList="nodownload noremoteplayback"
+                style={{ display: "block", width: "100%", height: "auto", background: "#000" }}
               />
 
-              {/* FB-like bottom control bar (shown when using custom controls) */}
+              {/* FB-like bottom bar when using custom controls */}
               {!post.videoShowControls && (
-                <div style={fb.controls}>
-                  <button
-                    type="button"
-                    style={fb.btn}
-                    onClick={onVideoTogglePlay}
-                    aria-label={isVideoPlaying ? "Pause" : "Play"}
-                    title={isVideoPlaying ? "Pause" : "Play"}
-                    disabled={disabled}
+                <div style={fb.bottom}>
+                  {/* progress */}
+                  <div
+                    role="slider"
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(duration || 0)}
+                    aria-valuenow={Math.round(current || 0)}
+                    aria-label="Video progress"
+                    tabIndex={0}
+                    onClick={handleBarClick}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowLeft") { seekTo(current - 5); e.preventDefault(); }
+                      if (e.key === "ArrowRight") { seekTo(current + 5); e.preventDefault(); }
+                    }}
+                    style={fb.progress}
+                    title="Seek"
                   >
-                    {isVideoPlaying ? "❚❚" : "▶"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={fb.btn}
-                    onClick={onVideoToggleMute}
-                    aria-label={isMuted ? "Unmute" : "Mute"}
-                    title={isMuted ? "Unmute" : "Mute"}
-                    disabled={disabled}
-                  >
-                    {isMuted ? "🔇" : "🔊"}
-                  </button>
-
-                  <div style={fb.spacer} />
-
-                  <div style={fb.settingsWrap} ref={settingsRef}>
-                    <button
-                      type="button"
-                      style={fb.btn}
-                      aria-haspopup="menu"
-                      aria-expanded={settingsOpen}
-                      onClick={() => setSettingsOpen(o => !o)}
-                      title="Settings"
-                      disabled={disabled}
-                    >
-                      ⚙
-                    </button>
-
-                    {settingsOpen && (
-                      <div style={fb.menu} role="menu">
-                        {[0.5, 1, 1.25, 1.5].map((r) => (
-                          <button
-                            key={r}
-                            type="button"
-                            role="menuitem"
-                            style={fb.menuBtn(r === playbackRate)}
-                            onClick={() => setRate(r)}
-                            title={`${r}×`}
-                            disabled={disabled}
-                          >
-                            {r}× {r === playbackRate ? "✓" : ""}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <div style={fb.progBuffered(bufferedPct)} />
+                    <div style={fb.progPlayed(playedPct)} />
                   </div>
 
-                  <button
-                    type="button"
-                    style={fb.btn}
-                    onClick={toggleFullscreen}
-                    aria-label="Fullscreen"
-                    title="Fullscreen"
-                    disabled={disabled}
-                  >
-                    ⛶
-                  </button>
+                  {/* controls row */}
+                  <div style={fb.row}>
+                    <div style={fb.time} aria-label={`Time ${fmtTime(current)} of ${fmtTime(duration)}`}>
+                      {fmtTime(current)} / {fmtTime(duration)}
+                    </div>
+
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button
+                        type="button"
+                        style={fb.btn}
+                        onClick={onVideoTogglePlay}
+                        aria-label={isVideoPlaying ? "Pause" : "Play"}
+                        title={isVideoPlaying ? "Pause" : "Play"}
+                        disabled={disabled}
+                      >
+                        {isVideoPlaying ? "❚❚" : "▶"}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={fb.btn}
+                        onClick={onVideoToggleMute}
+                        aria-label={isMuted ? "Unmute" : "Mute"}
+                        title={isMuted ? "Unmute" : "Mute"}
+                        disabled={disabled}
+                      >
+                        {isMuted ? "🔇" : "🔊"}
+                      </button>
+
+                      <div style={fb.settingsWrap} ref={settingsRef}>
+                        <button
+                          type="button"
+                          style={fb.btn}
+                          aria-haspopup="menu"
+                          aria-expanded={settingsOpen}
+                          onClick={() => setSettingsOpen(o => !o)}
+                          title="Settings"
+                          disabled={disabled}
+                        >
+                          ⚙
+                        </button>
+
+                        {settingsOpen && (
+                          <div style={fb.menu} role="menu">
+                            {[0.5, 1, 1.25, 1.5, 2].map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                role="menuitem"
+                                style={fb.menuBtn(r === playbackRate)}
+                                onClick={() => setRate(r)}
+                                title={`${r}×`}
+                                disabled={disabled}
+                              >
+                                {r}× {r === playbackRate ? "✓" : ""}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        style={fb.btn}
+                        onClick={toggleFullscreen}
+                        aria-label="Fullscreen"
+                        title="Fullscreen"
+                        disabled={disabled}
+                      >
+                        ⛶
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -749,8 +850,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
         </button>
       ) : null}
 
-      {/* Ensure programmatic in-view play/pause on inView change for native <video> */}
-      {/* This effect is placed after the video markup so refs are set. */}
+      {/* Ensure programmatic in-view play/pause on inView change */}
       <InViewVideoController inView={inView} videoRef={videoRef} setIsVideoPlaying={setIsVideoPlaying} muted={isMuted} />
 
       {/* Ad card */}
@@ -857,7 +957,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
                     />
                   ))}
                   <span className="muted rx-count" style={{ marginLeft: 8 }}>
-                    {/* Use postForCounts so NamesPeek sees correct counts & showReactions=true */}
                     <NamesPeek post={postForCounts} count={totalReactions} kind="reactions" label="reactions" hideInlineLabel />
                   </span>
                 </div>
