@@ -278,45 +278,69 @@ export function ParticipantsPanel({ feedId }) {
         <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
           <button className="btn" onClick={() => refresh(false)}>Refresh</button>
           <button
-            className="btn"
-            onClick={() => {
-              if (!rows?.length) return;
+  className="btn"
+  onClick={() => {
+    if (!rows?.length) return;
 
-              // Transform: any *_dwell_ms -> *_dwell_s (rounded seconds), drop *_dwell_ms
-              const rowsForCsv = rows.map((r) => {
-                const out = { ...r };
-                for (const k of Object.keys(r)) {
-                  const m = k.match(/^(.*)_dwell_ms$/);
-                  if (m) {
-                    const base = m[1];
-                    const sKey = `${base}_dwell_s`;
-                    if (out[sKey] == null) {
-                      const ms = Number(r[k] || 0);
-                      out[sKey] = Math.round(ms / 1000);
-                    }
-                    delete out[k];
-                  }
-                }
-                return out;
-              });
+    // 1) Transform dwell_ms → dwell_s
+    const transformed = rows.map((r) => {
+      const out = { ...r };
+      for (const k of Object.keys(r)) {
+        const m = k.match(/^(.*)_dwell_ms$/);
+        if (m) {
+          const base = m[1];
+          const sKey = `${base}_dwell_s`;
+          if (out[sKey] == null) {
+            const ms = Number(r[k] || 0);
+            out[sKey] = Math.round(ms / 1000);
+          }
+          delete out[k];
+        }
+      }
+      return out;
+    });
 
-              // Build header as union of keys across transformed rows (so *_dwell_s appears even if row 0 was legacy)
-              const headerSet = new Set();
-              rowsForCsv.forEach(r => Object.keys(r).forEach(k => headerSet.add(k)));
-              const header = Array.from(headerSet);
+    // 2) Normalize values
+    const BOOL_SUFFIX = /(reacted|expandable|expanded|commented|shared|reported_misinfo)$/;
 
-              const csv = toCSV(rowsForCsv, header);
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `fakebook_participants${feedId ? `_${feedId}` : ""}.csv`;
-              document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-            }}
-            disabled={!rows?.length}
-          >
-            Download CSV
-          </button>
+    const rowsForCsv = transformed.map((r) => {
+      const out = { ...r };
+      for (const k of Object.keys(out)) {
+        if (/_dwell_s$/.test(k)) {
+          out[k] = Number(out[k] || 0);
+          continue;
+        }
+        if (BOOL_SUFFIX.test(k)) {
+          const v = Number(out[k]);
+          out[k] = Number.isFinite(v) ? (v ? 1 : 0) : 0;
+          continue;
+        }
+        if (/comment_count$/.test(k)) {
+          delete out[k]; // 🚫 drop comment_count column entirely
+          continue;
+        }
+      }
+      return out;
+    });
+
+    // 3) Build header as union of keys
+    const headerSet = new Set();
+    rowsForCsv.forEach(r => Object.keys(r).forEach(k => headerSet.add(k)));
+    const header = Array.from(headerSet);
+
+    // 4) Emit CSV
+    const csv = toCSV(rowsForCsv, header);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fakebook_participants${feedId ? `_${feedId}` : ""}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }}
+  disabled={!rows?.length}
+>
+  Download CSV
+</button>
         </div>
       </div>
 
