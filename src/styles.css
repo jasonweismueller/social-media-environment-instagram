@@ -757,7 +757,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 /* ---- Tweak sizes here ---- */
 :root{
   --vol-track: 4px;         /* thin track */
-  --vol-thumb: 12px;        /* small knob */
+  --vol-thumb: 8px;        /* small knob */
   --vol-len: 100px;         /* usable length */
   --vol-val: 100;           /* fill %, updated from JS */
 }
