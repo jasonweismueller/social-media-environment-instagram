@@ -856,32 +856,35 @@ useEffect(() => {
       </button>
 
       {volOpen && (
-        <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-          <div className="fb-vol-box">
-            {/* ← this is the updated slider from step (1) */}
-            <input
-              className="fb-vol-slider"
-              type="range"
-              min="0" max="100" step="1"
-              value={Math.round(volume * 100)}
-              aria-label="Volume"
-              aria-orientation="vertical"
-              style={{ ['--vol-val']: Math.round(volume * 100) }}
-              onInput={(e) => {
-                const v = videoRef.current;
-                const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                const vol = pct / 100;
-                setVolume(vol);
-                if (v) v.volume = vol;
-                const shouldMute = vol === 0;
-                if (v && v.muted !== shouldMute) v.muted = shouldMute;
-                setIsMuted(shouldMute);
-              }}
-              onChange={() => {}}
-            />
-          </div>
-        </div>
-      )}
+  <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
+    <div
+      className="fb-vol-box"
+      /* one source of truth for the fill percentage (0–100) */
+      style={{ ['--vol-val']: Math.round(volume * 100) }}
+    >
+      <div className="fb-vol-visual" aria-hidden="true" />
+      <input
+        className="fb-vol-slider"
+        type="range"
+        min="0" max="100" step="1"
+        value={Math.round(volume * 100)}
+        aria-label="Volume"
+        aria-orientation="vertical"
+        onInput={(e) => {
+          const v = videoRef.current;
+          const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+          const vol = pct / 100;
+          setVolume(vol);
+          if (v) v.volume = vol;
+          const shouldMute = vol === 0;
+          if (v && v.muted !== shouldMute) v.muted = shouldMute;
+          setIsMuted(shouldMute);
+        }}
+        onChange={() => {}}
+      />
+    </div>
+  </div>
+)}
     </div>
 
     {/* settings (speed) */}
