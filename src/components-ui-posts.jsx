@@ -807,131 +807,128 @@ useEffect(() => {
       <div style={fb.progPlayed(playedPct)} />
     </div>
 
-    {/* controls row */}
-    <div style={fb.row}>
-      <div style={fb.time} aria-label={`Time ${fmtTime(current)} of ${fmtTime(duration)}`}>
-        {fmtTime(current)} / {fmtTime(duration)}
-      </div>
+  <div style={fb.row}>
+  {/* LEFT: play + time */}
+  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+    <button
+      type="button"
+      style={fb.btn}
+      onClick={onVideoTogglePlay}
+      aria-label={isVideoPlaying ? "Pause" : "Play"}
+      title={isVideoPlaying ? "Pause" : "Play"}
+      disabled={disabled}
+    >
+      {isVideoPlaying ? "❚❚" : "▶"}
+    </button>
 
-      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-        {/* play/pause */}
-        <button
-          type="button"
-          style={fb.btn}
-          onClick={onVideoTogglePlay}
-          aria-label={isVideoPlaying ? "Pause" : "Play"}
-          title={isVideoPlaying ? "Pause" : "Play"}
-          disabled={disabled}
-        >
-          {isVideoPlaying ? "❚❚" : "▶"}
-        </button>
-
-        {/* Mute + vertical volume (hover popover, delayed close) */}
-<div
-  className="fb-vol"
-  onMouseEnter={() => {
-    clearTimeout(volHideTimer.current);
-    setVolOpen(true);
-  }}
-  onMouseLeave={() => {
-    clearTimeout(volHideTimer.current);
-    volHideTimer.current = setTimeout(() => setVolOpen(false), 600);
-  }}
->
-  <button
-    type="button"
-    style={fb.btn}                 // match other buttons’ style
-    onClick={() => {
-      const v = videoRef.current;
-      if (!v) return;
-      const next = !v.muted;
-      v.muted = next;
-      setIsMuted(next);
-      if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
-      click(next ? "video_mute" : "video_unmute");
-      setVolOpen(true);
-    }}
-    aria-label={isMuted ? "Unmute" : "Mute"}
-    title={isMuted ? "Unmute" : "Mute"}
-    disabled={disabled}
-  >
-    {isMuted || volume === 0 ? "🔇" : "🔊"}
-  </button>
-
-  {volOpen && (
-    <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-      <div className="fb-vol-box">     {/* NEW: bounds the slider so it won't overlay the button */}
-        <input
-  className="fb-vol-slider"
-  type="range"
-  min="0" max="100" step="1"
-  value={Math.round(volume * 100)}
-  aria-label="Volume"
-  aria-orientation="vertical"
-  /* drives the blue fill (0–100) */
-  style={{ ['--vol-val']: Math.round(volume * 100) }}
-  onInput={(e) => {
-    const v = videoRef.current;
-    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-    const vol = pct / 100;
-    setVolume(vol);
-    if (v) v.volume = vol;
-    const shouldMute = vol === 0;
-    if (v && v.muted !== shouldMute) v.muted = shouldMute;
-    setIsMuted(shouldMute);
-  }}
-  onChange={() => {}}
-/>
-      </div>
+    <div style={fb.time} aria-label={`Time ${fmtTime(current)} of ${fmtTime(duration)}`}>
+      {fmtTime(current)} / {fmtTime(duration)}
     </div>
-  )}
-</div>
+  </div>
 
-        {/* settings (speed) */}
-        <div style={fb.settingsWrap} ref={settingsRef}>
-          <button
-            type="button"
-            style={fb.btn}
-            aria-haspopup="menu"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen(o => !o)}
-            title="Settings"
-            disabled={disabled}
-          >
-            ⚙
-          </button>
-          {settingsOpen && (
-            <div style={fb.menu} role="menu">
-              {[0.5, 1, 1.25, 1.5, 2].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="menuitem"
-                  style={fb.menuBtn(r === playbackRate)}
-                  onClick={() => setRate(r)}
-                  title={`${r}×`}
-                  disabled={disabled}
-                >
-                  {r}× {r === playbackRate ? "✓" : ""}
-                </button>
-              ))}
-            </div>
-          )}
+  {/* RIGHT: volume, settings, fullscreen */}
+  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+    {/* Mute + vertical volume (popover) */}
+    <div
+      className="fb-vol"
+      onMouseEnter={() => { clearTimeout(volHideTimer.current); setVolOpen(true); }}
+      onMouseLeave={() => {
+        clearTimeout(volHideTimer.current);
+        volHideTimer.current = setTimeout(() => setVolOpen(false), 600);
+      }}
+    >
+      <button
+        type="button"
+        style={fb.btn}
+        onClick={() => {
+          const v = videoRef.current; if (!v) return;
+          const next = !v.muted;
+          v.muted = next; setIsMuted(next);
+          if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
+          click(next ? "video_mute" : "video_unmute");
+          setVolOpen(true);
+        }}
+        aria-label={isMuted ? "Unmute" : "Mute"}
+        title={isMuted ? "Unmute" : "Mute"}
+        disabled={disabled}
+      >
+        {isMuted || volume === 0 ? "🔇" : "🔊"}
+      </button>
+
+      {volOpen && (
+        <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
+          <div className="fb-vol-box">
+            {/* ← this is the updated slider from step (1) */}
+            <input
+              className="fb-vol-slider"
+              type="range"
+              min="0" max="100" step="1"
+              value={Math.round(volume * 100)}
+              aria-label="Volume"
+              aria-orientation="vertical"
+              style={{ ['--vol-val']: Math.round(volume * 100) }}
+              onInput={(e) => {
+                const v = videoRef.current;
+                const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                const vol = pct / 100;
+                setVolume(vol);
+                if (v) v.volume = vol;
+                const shouldMute = vol === 0;
+                if (v && v.muted !== shouldMute) v.muted = shouldMute;
+                setIsMuted(shouldMute);
+              }}
+              onChange={() => {}}
+            />
+          </div>
         </div>
-
-        {/* fullscreen */}
-        <button
-          type="button"
-          style={fb.btn}
-          onClick={toggleFullscreen}
-          aria-label="Fullscreen"
-          title="Fullscreen"
-          disabled={disabled}
-        >
-          ⛶
-        </button>
-      </div>
+      )}
     </div>
+
+    {/* settings (speed) */}
+    <div style={fb.settingsWrap} ref={settingsRef}>
+      <button
+        type="button"
+        style={fb.btn}
+        aria-haspopup="menu"
+        aria-expanded={settingsOpen}
+        onClick={() => setSettingsOpen(o => !o)}
+        title="Settings"
+        disabled={disabled}
+      >
+        ⚙
+      </button>
+      {settingsOpen && (
+        <div style={fb.menu} role="menu">
+          {[0.5, 1, 1.25, 1.5, 2].map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="menuitem"
+              style={fb.menuBtn(r === playbackRate)}
+              onClick={() => setRate(r)}
+              title={`${r}×`}
+              disabled={disabled}
+            >
+              {r}× {r === playbackRate ? "✓" : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* fullscreen */}
+    <button
+      type="button"
+      style={fb.btn}
+      onClick={toggleFullscreen}
+      aria-label="Fullscreen"
+      title="Fullscreen"
+      disabled={disabled}
+    >
+      ⛶
+    </button>
+  </div>
+</div>
   </div>
 )}
             </div>
