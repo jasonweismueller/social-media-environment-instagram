@@ -735,3 +735,100 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
+
+/* === FB-like volume popover === */
+.fb-vol { position: relative; pointer-events: auto; }
+
+.fb-vol-pop {
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17,24,39,.98);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 10px 8px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  z-index: 6;                 /* above .fb-controls */
+  pointer-events: auto;        /* popover stays interactive */
+  opacity: 1;
+  transition: opacity .12s ease, transform .12s ease;
+  transform-origin: bottom center;
+}
+
+.fb-vol-pop.hide {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px) scale(.98);
+  pointer-events: none;
+}
+
+/* Vertical slider (range) */
+.fb-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;                /* visual “thickness” */
+  height: 110px;
+  writing-mode: bt-lr;        /* vertical */
+  transform: rotate(180deg);  /* up = louder */
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+}
+
+/* Track */
+.fb-vol-slider::-webkit-slider-runnable-track {
+  width: 26px;
+  height: 110px;
+  background: linear-gradient(to top, #fff 0 0) no-repeat;
+  background-size: 100% 0%;   /* we’ll not animate fill via CSS; JS can if desired */
+  background-color: rgba(255,255,255,.25);
+  border-radius: 12px;
+}
+.fb-vol-slider::-moz-range-track {
+  width: 26px;
+  height: 110px;
+  background-color: rgba(255,255,255,.25);
+  border-radius: 12px;
+}
+
+/* Thumb */
+.fb-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  margin-top: -7px;           /* centers on track; tweak if needed */
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+.fb-vol-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+
+/* Focus ring for accessibility */
+.fb-vol-slider:focus-visible {
+  outline: 2px solid rgba(255,255,255,.6);
+  outline-offset: 2px;
+}
+
+/* Optional: a tiny triangle pointer under the popover */
+.fb-vol-pop::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0 6px;
+  border-style: solid;
+  border-color: rgba(17,24,39,.98) transparent transparent transparent;
+  filter: drop-shadow(0 -1px 0 rgba(255,255,255,.12));
+}

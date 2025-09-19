@@ -41,6 +41,20 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   const [volume, setVolume] = useState(1); // start at full volume
+  const [volOpen, setVolOpen] = useState(false);
+  const volWrapRef = useRef(null);
+  const volCloseTimer = useRef(null);
+
+const openVol = () => {
+  clearTimeout(volCloseTimer.current);
+  setVolOpen(true);
+};
+const scheduleVolClose = () => {
+  clearTimeout(volCloseTimer.current);
+  volCloseTimer.current = setTimeout(() => setVolOpen(false), 600); // ← delay before closing
+};
+
+useEffect(() => () => clearTimeout(volCloseTimer.current), []);
 
 
   // Participant comment (this session)
@@ -808,61 +822,63 @@ useEffect(() => {
           {isVideoPlaying ? "❚❚" : "▶"}
         </button>
 
-        {/* mute/unmute */}
-        <button
-          type="button"
-          style={fb.btn}
-          onClick={() => {
-            const v = videoRef.current;
-            if (!v) return;
-            const next = !v.muted;
-            v.muted = next;
-            setIsMuted(next);
-            // if unmuting from 0 volume, bump volume up a little so it's audible
-            if (!next && v.volume === 0) {
-              v.volume = 0.2;
-              setVolume(0.2);
-            }
-            click(next ? "video_mute" : "video_unmute");
-          }}
-          aria-label={isMuted ? "Unmute" : "Mute"}
-          title={isMuted ? "Unmute" : "Mute"}
-          disabled={disabled}
-        >
-          {isMuted || volume === 0 ? "🔇" : "🔊"}
-        </button>
+        {/* Mute + vertical volume (hover popover, delayed close) */}
+<div
+  className="fb-vol"
+  onMouseEnter={() => {
+    clearTimeout(volHideTimer.current);
+    setVolOpen(true);
+  }}
+  onMouseLeave={() => {
+    clearTimeout(volHideTimer.current);
+    volHideTimer.current = setTimeout(() => setVolOpen(false), 600); // hover-out delay
+  }}
+>
+  <button
+    type="button"
+    className="fb-btn"
+    onClick={() => {
+      const v = videoRef.current;
+      if (!v) return;
+      const next = !v.muted;
+      v.muted = next;
+      setIsMuted(next);
+      if (!next && v.volume === 0) { v.volume = 0.2; setVolume(0.2); }
+      click(next ? "video_mute" : "video_unmute");
+      // also toggle popover open on click (like FB)
+      setVolOpen(true);
+    }}
+    aria-label={isMuted ? "Unmute" : "Mute"}
+    title={isMuted ? "Unmute" : "Mute"}
+    disabled={disabled}
+  >
+    {isMuted || volume === 0 ? "🔇" : "🔊"}
+  </button>
 
-        {/* volume slider */}
-        <input
-  type="range"
-  min="0"
-  max="100"
-  step="1"
-  value={Math.round(volume * 100)}
-  onInput={(e) => {
-    const v = videoRef.current;
-    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-    const vol = pct / 100;
-    setVolume(vol);
-    if (v) v.volume = vol;
-    const shouldMute = vol === 0;
-    if (v && v.muted !== shouldMute) v.muted = shouldMute;
-    setIsMuted(shouldMute);
-  }}
-  onChange={() => {}} // keep for Safari consistency; logic already handled in onInput
-  aria-label="Volume"
-  title="Volume"
-  style={{
-    WebkitAppearance: "none",
-    appearance: "none",
-    width: 90,
-    height: 4,
-    borderRadius: 2,
-    background: "rgba(255,255,255,.35)",
-    outline: "none",
-    cursor: "pointer",
-  }}
-/>
+  {volOpen && (
+    <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
+      <input
+        className="fb-vol-slider"
+        type="range"
+        min="0" max="100" step="1"
+        value={Math.round(volume * 100)}
+        onInput={(e) => {
+          const v = videoRef.current;
+          const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+          const vol = pct / 100;
+          setVolume(vol);
+          if (v) v.volume = vol;
+          const shouldMute = vol === 0;
+          if (v && v.muted !== shouldMute) v.muted = shouldMute;
+          setIsMuted(shouldMute);
+        }}
+        onChange={() => {}}
+        aria-label="Volume"
+        title="Volume"
+      />
+    </div>
+  )}
+</div>
 
         {/* settings (speed) */}
         <div style={fb.settingsWrap} ref={settingsRef}>
