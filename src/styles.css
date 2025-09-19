@@ -780,7 +780,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   width: var(--vol-track);
   border-radius: 999px;
   background: var(--vol-base);
-  overflow: hidden;                          /* clip the fill to the rounded pill */
+  overflow: hidden;
+  pointer-events: none;          /* ← ensure clicks go to the input */
 }
 
 /* The fill (grows from bottom up), fully clipped inside the pill */
@@ -790,6 +791,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   left: 0; right: 0; bottom: 0;
   height: calc(var(--vol-val) * 1%);
   background: var(--vol-fill);
+  border-radius: inherit;        /* ← keeps the top cap nicely rounded */
+  will-change: height;           /* micro perf hint */
 }
 
 /* Native slider on top: transparent track; we only keep the thumb & input */
@@ -804,6 +807,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   padding: 0; border: 0; outline: none;
   cursor: pointer;
   accent-color: transparent;
+  touch-action: none;            /* ← smoother drag on mobile */
+  -webkit-tap-highlight-color: transparent; /* ← remove blue flash on iOS */
 }
 
 /* Hide native track visuals; keep hit-area */
