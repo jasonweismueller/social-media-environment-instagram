@@ -854,13 +854,17 @@ useEffect(() => {
       >
         {isMuted || volume === 0 ? "🔇" : "🔊"}
       </button>
-
-      {volOpen && (
+{volOpen && (
   <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
     <div
       className="fb-vol-box"
-      /* one source of truth for the fill percentage (0–100) */
-      style={{ ['--vol-val']: Math.round(volume * 100) }}
+      // One source of truth for the visual pill:
+      // - --vol-val  : 0–100%
+      // - --vol-fill : blue when >0, dark when muted/0
+      style={{
+        ['--vol-val']: Math.round(volume * 100),
+        ['--vol-fill']: (isMuted || volume === 0) ? 'rgba(0,0,0,.45)' : '#1877f2'
+      }}
     >
       <div className="fb-vol-visual" aria-hidden="true" />
       <input
@@ -874,11 +878,19 @@ useEffect(() => {
           const v = videoRef.current;
           const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
           const vol = pct / 100;
+
           setVolume(vol);
           if (v) v.volume = vol;
+
           const shouldMute = vol === 0;
           if (v && v.muted !== shouldMute) v.muted = shouldMute;
           setIsMuted(shouldMute);
+
+          // Optional: instant visual update before React re-renders
+          e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
+          e.currentTarget.parentElement?.style.setProperty('--vol-fill',
+            (shouldMute ? 'rgba(0,0,0,.45)' : '#1877f2')
+          );
         }}
         onChange={() => {}}
       />
