@@ -751,7 +751,7 @@ useEffect(() => {
   src={u}
   poster={post.videoPosterUrl || undefined}
   playsInline
-  muted={true}
+  muted={isMuted}
   autoPlay={inView}
   preload="auto"
   loop={!!post.videoLoop}
@@ -840,7 +840,7 @@ useEffect(() => {
 >
   <button
     type="button"
-    className="fb-btn"
+    style={fb.btn} 
     onClick={() => {
       const v = videoRef.current;
       if (!v) return;
@@ -865,6 +865,8 @@ useEffect(() => {
         className="fb-vol-slider"
         type="range"
         min="0" max="100" step="1"
+        aria-label="Volume"
+        aria-orientation="vertical" 
         value={Math.round(volume * 100)}
         onInput={(e) => {
           const v = videoRef.current;
@@ -877,7 +879,6 @@ useEffect(() => {
           setIsMuted(shouldMute);
         }}
         onChange={() => {}}
-        aria-label="Volume"
         title="Volume"
       />
     </div>
