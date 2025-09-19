@@ -869,15 +869,18 @@ useEffect(() => {
           aria-label="Volume"
           aria-orientation="vertical"
           onInput={(e) => {
-            const v = videoRef.current;
-            const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-            const vol = pct / 100;
-            setVolume(vol);
-            if (v) v.volume = vol;
-            const shouldMute = vol === 0;
-            if (v && v.muted !== shouldMute) v.muted = shouldMute;
-            setIsMuted(shouldMute);
-          }}
+  const v = videoRef.current;
+  const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+  const vol = pct / 100;
+  setVolume(vol);
+  if (v) v.volume = vol;
+  const shouldMute = vol === 0;
+  if (v && v.muted !== shouldMute) v.muted = shouldMute;
+  setIsMuted(shouldMute);
+
+  // NEW: drive the vertical fill with a CSS var
+  e.currentTarget.style.setProperty('--vol-val', String(pct));
+}}
           onChange={() => {}}
         />
       </div>
