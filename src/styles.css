@@ -736,9 +736,9 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
 
-/* ========== Volume popover ========== */
+/* --- Volume popover container (no dark box) --- */
 .fb-vol { position: relative; pointer-events: auto; }
-.fb-vol > button { position: relative; z-index: 10; }           /* keep button clickable */
+.fb-vol > button { position: relative; z-index: 10; }  /* keep button clickable */
 
 .fb-vol-pop{
   position:absolute; bottom: calc(100% + 10px); left:50%;
@@ -750,67 +750,74 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 .fb-vol-pop.hide{ opacity:0; transform:translateX(-50%) translateY(6px) scale(.98); pointer-events:none; }
 
 .fb-vol-box{
-  width: 28px;          /* compact panel thickness */
-  height: 110px;        /* slider length */
+  width: 28px;              /* popover panel thickness */
+  height: 110px;            /* slider length */
   display:grid; place-items:center;
 }
 
-/* ===== sizes (tweak here) ===== */
+/* ---- Tweak sizes here ---- */
 :root{
-  --vol-track: 4px;     /* super thin track */
-  --vol-thumb: 12px;    /* small knob */
-  --vol-len: 100px;     /* usable slider length */
-  --vol-val: 100;       /* filled % (JS updates this) */
+  --vol-track: 4px;         /* thin track */
+  --vol-thumb: 12px;        /* small knob */
+  --vol-len: 100px;         /* usable length */
+  --vol-val: 100;           /* fill %, updated from JS */
 }
 
-/* ---------- WebKit (Chrome/Safari) – true vertical ---------- */
+/* ===== Chrome/Safari (WebKit) ===== */
 .fb-vol-slider{
-  -webkit-appearance: slider-vertical !important;  /* force vertical */
+  -webkit-appearance: slider-vertical !important; /* force vertical */
   appearance: none;
-  width: 28px;                 /* control box thickness */
-  height: var(--vol-len);      /* length */
+  width: 28px;                  /* control box thickness */
+  height: var(--vol-len);
   background: transparent;
-  cursor: pointer; outline: none; padding:0; display:block;
+  padding: 0;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  accent-color: transparent;    /* kill blue default */
 }
 
-/* Center a skinny track; paint fill with CSS var */
+/* Make a centered skinny track and a vertical fill using layered backgrounds */
 .fb-vol-slider::-webkit-slider-runnable-track{
-  width: var(--vol-track);
   height: 100%;
-  margin: 0 auto;              /* center the strip */
   border-radius: 999px;
   background:
-    linear-gradient(
-      to top,
-      rgba(255,255,255,.9) 0%,
-      rgba(255,255,255,.9) calc(var(--vol-val)*1%),
-      rgba(255,255,255,.28) calc(var(--vol-val)*1%),
-      rgba(255,255,255,.28) 100%
-    );
+    /* filled part (bottom -> up) */
+    linear-gradient(#fff, #fff) center bottom / var(--vol-track) calc(var(--vol-val)*1%) no-repeat,
+    /* base track */
+    linear-gradient(rgba(255,255,255,.28), rgba(255,255,255,.28)) center / var(--vol-track) 100% no-repeat;
+  background-color: transparent;
 }
 
-/* centered small thumb */
+/* Small centered thumb (white, not blue) */
 .fb-vol-slider::-webkit-slider-thumb{
-  -webkit-appearance: none; appearance: none;
-  width: var(--vol-thumb); height: var(--vol-thumb);
-  border-radius: 50%; background:#fff; border:0;
-  box-shadow: 0 2px 10px rgba(0,0,0,.25); margin:0;
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  margin: 0;                 /* no offset */
 }
 
-/* ---------- Firefox fallback (rotate horizontal) ---------- */
+/* ===== Firefox fallback (rotate) ===== */
 @supports not (-webkit-appearance: slider-vertical) {
   .fb-vol-slider{
     -webkit-appearance: none; appearance: none;
-    width: calc(var(--vol-len) + var(--vol-thumb));   /* compensate rotation */
+    width: calc(var(--vol-len) + var(--vol-thumb));
     height: 28px;
     transform: rotate(-90deg);
     transform-origin: center;
-    background: transparent; cursor: pointer; outline:none; display:block;
+    background: transparent;
+    padding: 0; border: 0; outline: none; cursor: pointer;
   }
 
-  /* Fake a centered skinny track with a background trick */
+  /* draw a centered thin track */
   .fb-vol-slider::-moz-range-track{
     height: 100%;
+    border-radius: 999px;
     background:
       linear-gradient(
         to right,
@@ -819,29 +826,35 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
         rgba(255,255,255,.28) calc(50% + var(--vol-track)/2),
         transparent calc(50% + var(--vol-track)/2)
       );
-    border-radius: 999px;
   }
 
-  /* Filled portion (since we rotated, this appears vertical) */
+  /* progress = filled center strip */
   .fb-vol-slider::-moz-range-progress{
     height: 100%;
+    border-radius: 999px;
     background:
       linear-gradient(
         to right,
         transparent calc(50% - var(--vol-track)/2),
-        rgba(255,255,255,.9) calc(50% - var(--vol-track)/2),
-        rgba(255,255,255,.9) calc(50% + var(--vol-track)/2),
+        #fff calc(50% - var(--vol-track)/2),
+        #fff calc(50% + var(--vol-track)/2),
         transparent calc(50% + var(--vol-track)/2)
       );
-    border-radius: 999px;
   }
 
   .fb-vol-slider::-moz-range-thumb{
-    width: var(--vol-thumb); height: var(--vol-thumb);
-    border-radius:50%; background:#fff; border:0;
-    box-shadow: 0 2px 10px rgba(0,0,0,.25); margin:0;
+    width: var(--vol-thumb);
+    height: var(--vol-thumb);
+    border-radius: 50%;
+    background: #fff;
+    border: 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    margin: 0;
   }
 }
 
-/* Focus ring (both) */
-.fb-vol-slider:focus-visible{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
+/* Focus ring */
+.fb-vol-slider:focus-visible {
+  outline: 2px solid rgba(255,255,255,.6);
+  outline-offset: 2px;
+}
