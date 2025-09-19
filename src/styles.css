@@ -735,127 +735,135 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
-/* === FB-like volume popover === */
+
+/* --- Volume popover (no dark box) --- */
 .fb-vol { position: relative; pointer-events: auto; }
 
-/* Keep popover clearly above the button */
+/* Transparent popover so only the slider is visible */
 .fb-vol-pop {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(17,24,39,.92);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 10px;
-  padding: 8px;
-  box-shadow: 0 10px 24px rgba(0,0,0,.35);
-  z-index: 6;
+  background: transparent;                /* ⟵ no dark box */
+  border: 0;
+  box-shadow: none;
+  padding: 0;                              /* tight around slider */
+  z-index: 9;
   opacity: 1;
   transition: opacity .12s ease, transform .12s ease;
   transform-origin: bottom center;
   pointer-events: auto;
 }
-
 .fb-vol-pop.hide {
   opacity: 0;
   transform: translateX(-50%) translateY(6px) scale(.98);
   pointer-events: none;
 }
 
-/* A sized box so the rotated control has predictable bounds */
+/* Keep the button always clickable above the popover */
+.fb-vol > button { position: relative; z-index: 10; }
+
+/* Compact box that contains only the slider */
 .fb-vol-box {
-  width: 48px;               /* thickness of panel */
-  height: 150px;             /* vertical travel space */
+  width: 32px;    /* panel thickness */
+  height: 120px;  /* slider length */
   display: grid;
   place-items: center;
   pointer-events: auto;
 }
 
-/* ---------------------------------------------------------- */
-/* Preferred: native vertical slider (Chrome/Safari)          */
-/* ---------------------------------------------------------- */
+/* ====== SIZES (smaller, centered) ====== */
+:root {
+  --vol-track: 6px;   /* track thickness */
+  --vol-thumb: 16px;  /* knob size */
+  --vol-ctl: 28px;    /* control thickness (slider box width) */
+  --vol-len: 100px;   /* slider length */
+}
+
+/* --- Chrome/Safari: native vertical slider --- */
 @supports (-webkit-appearance: slider-vertical) {
   .fb-vol-slider {
     -webkit-appearance: slider-vertical;
     appearance: none;
-    display: block;
-    width: 36px;             /* thickness */
-    height: 120px;           /* length */
+    width: var(--vol-ctl);          /* control thickness */
+    height: var(--vol-len);         /* length */
     background: transparent;
     cursor: pointer;
     outline: none;
     padding: 0;
+    display: block;
   }
 
+  /* center a slim track inside the thicker control box */
   .fb-vol-slider::-webkit-slider-runnable-track {
-    width: 8px;              /* track thickness */
+    width: var(--vol-track);
     height: 100%;
-    margin: 0 auto;          /* center in the 36px box */
-    background-color: rgba(255,255,255,.28);
+    margin: 0 auto;                 /* ⟵ centers the track */
+    background: rgba(255,255,255,.32);
     border-radius: 999px;
   }
 
   .fb-vol-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 22px;
-    height: 22px;
-    border-radius: 999px;
+    width: var(--vol-thumb);
+    height: var(--vol-thumb);
+    border-radius: 50%;
     background: #fff;
     border: 0;
     box-shadow: 0 2px 10px rgba(0,0,0,.25);
-    margin: 0;               /* centered on track */
+    margin: 0;                      /* ⟵ keeps the knob centered */
   }
 }
 
-/* ---------------------------------------------------------- */
-/* Fallback: rotate a horizontal slider (Firefox/others)      */
-/* ---------------------------------------------------------- */
+/* --- Firefox/others: rotate a horizontal slider --- */
 @supports not (-webkit-appearance: slider-vertical) {
   .fb-vol-slider {
     -webkit-appearance: none;
     appearance: none;
-    display: block;
-    width: 140px;            /* long side pre-rotation */
-    height: 34px;            /* thick side pre-rotation */
+    width: calc(var(--vol-len) + var(--vol-thumb));  /* compensate rotation */
+    height: var(--vol-ctl);
     transform: rotate(-90deg);
     transform-origin: center;
     background: transparent;
     cursor: pointer;
     outline: none;
     padding: 0;
+    display: block;
   }
 
+  /* Track (centered strip) */
   .fb-vol-slider::-webkit-slider-runnable-track,
   .fb-vol-slider::-moz-range-track {
-    width: 140px;
-    height: 10px;            /* nice chunky track */
-    background-color: rgba(255,255,255,.28);
+    height: var(--vol-track);
+    background: rgba(255,255,255,.32);
     border-radius: 999px;
+    margin: calc((var(--vol-ctl) - var(--vol-track)) / 2) 0; /* center vertically in control */
   }
 
+  /* Thumb (smaller & centered) */
   .fb-vol-slider::-webkit-slider-thumb,
   .fb-vol-slider::-moz-range-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 22px;
-    height: 22px;
-    border-radius: 999px;
+    width: var(--vol-thumb);
+    height: var(--vol-thumb);
+    border-radius: 50%;
     background: #fff;
     border: 0;
     box-shadow: 0 2px 10px rgba(0,0,0,.25);
-    margin: 0;               /* keeps it centered after rotation */
+    margin: 0;  /* prevents off-centering after rotation */
   }
 }
 
-/* Focus ring for accessibility */
+/* Focus ring */
 .fb-vol-slider:focus-visible {
   outline: 2px solid rgba(255,255,255,.6);
   outline-offset: 2px;
 }
 
-/* Tiny arrow */
+/* Optional tiny arrow under the (now transparent) popover */
 .fb-vol-pop::after {
   content: "";
   position: absolute;
@@ -864,9 +872,6 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   transform: translateX(-50%);
   border-width: 6px 6px 0 6px;
   border-style: solid;
-  border-color: rgba(17,24,39,.92) transparent transparent transparent;
-  filter: drop-shadow(0 -1px 0 rgba(255,255,255,.12));
+  border-color: rgba(17,24,39,0.92) transparent transparent transparent;
+  opacity: 0.0; /* hide the arrow since the popover is transparent */
 }
-
-/* Ensure the button is never visually “under” the popover by accident */
-.fb-vol > button { position: relative; z-index: 7; }
