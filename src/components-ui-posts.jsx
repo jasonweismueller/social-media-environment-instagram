@@ -41,20 +41,24 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   const [volume, setVolume] = useState(1); // start at full volume
-  const [volOpen, setVolOpen] = useState(false);
-  const volWrapRef = useRef(null);
-  const volCloseTimer = useRef(null);
+  // Volume popover state (hover-in open, hover-out delayed close with fade)
+const [volOpen, setVolOpen] = useState(false);
+const [volFading, setVolFading] = useState(false);
+const volHideTimer = useRef(null);
 
-const openVol = () => {
-  clearTimeout(volCloseTimer.current);
-  setVolOpen(true);
-};
-const scheduleVolClose = () => {
-  clearTimeout(volCloseTimer.current);
-  volCloseTimer.current = setTimeout(() => setVolOpen(false), 600); // ← delay before closing
-};
+// cleanup
+useEffect(() => () => clearTimeout(volHideTimer.current), []);
 
-useEffect(() => () => clearTimeout(volCloseTimer.current), []);
+// when closing, briefly apply the fade class
+useEffect(() => {
+  if (volOpen) {
+    setVolFading(false);
+    return;
+  }
+  setVolFading(true);
+  const t = setTimeout(() => setVolFading(false), 180); // match your CSS transition
+  return () => clearTimeout(t);
+}, [volOpen]);
 
 
   // Participant comment (this session)
