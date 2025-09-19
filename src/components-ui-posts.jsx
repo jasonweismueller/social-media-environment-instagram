@@ -42,13 +42,6 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const settingsRef = useRef(null);
   const [volume, setVolume] = useState(1); // start at full volume
 
-  const onVolumeChange = (e) => {
-  const v = videoRef.current;
-  const newVol = Number(e.target.value);
-  setVolume(newVol);
-  if (v) v.volume = newVol;
-  setIsMuted(newVol === 0);
-};
 
   // Participant comment (this session)
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
@@ -205,35 +198,59 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   };
 
   // wire native video events
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = true; // ensure element starts muted
+// A) After your "wire native video events" useEffect, REPLACE that effect body with this:
+useEffect(() => {
+  const v = videoRef.current;
+  if (!v) return;
 
-    const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-    const onTime = () => setCurrent(v.currentTime || 0);
-    const onProg = () => {
-      try {
-        const b = v.buffered;
-        if (b.length) setBufferedEnd(b.end(b.length - 1));
-      } catch {}
-    };
-    const onPlay = () => setIsVideoPlaying(true);
-    const onPause = () => setIsVideoPlaying(false);
+  // start in a reliable autoplay state
+  v.muted = true;
+  v.volume = volume; // apply initial volume
 
-    v.addEventListener("loadedmetadata", onLoadedMeta);
-    v.addEventListener("timeupdate", onTime);
-    v.addEventListener("progress", onProg);
-    v.addEventListener("play", onPlay);
-    v.addEventListener("pause", onPause);
-    return () => {
-      v.removeEventListener("loadedmetadata", onLoadedMeta);
-      v.removeEventListener("timeupdate", onTime);
-      v.removeEventListener("progress", onProg);
-      v.removeEventListener("play", onPlay);
-      v.removeEventListener("pause", onPause);
-    };
-  }, []);
+  const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+  const onTime      = () => setCurrent(v.currentTime || 0);
+  const onProg      = () => { try { const b = v.buffered; if (b.length) setBufferedEnd(b.end(b.length - 1)); } catch {} };
+  const onPlay      = () => setIsVideoPlaying(true);
+  const onPause     = () => setIsVideoPlaying(false);
+
+  // NEW: keep React state in sync with element changes
+  const onVol       = () => {
+    setVolume(v.volume);
+    setIsMuted(v.muted);
+  };
+
+  v.addEventListener("loadedmetadata", onLoadedMeta);
+  v.addEventListener("timeupdate", onTime);
+  v.addEventListener("progress", onProg);
+  v.addEventListener("play", onPlay);
+  v.addEventListener("pause", onPause);
+  v.addEventListener("volumechange", onVol);
+
+  return () => {
+    v.removeEventListener("loadedmetadata", onLoadedMeta);
+    v.removeEventListener("timeupdate", onTime);
+    v.removeEventListener("progress", onProg);
+    v.removeEventListener("play", onPlay);
+    v.removeEventListener("pause", onPause);
+    v.removeEventListener("volumechange", onVol);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // mount-only; we don't want to rebind handlers on every render
+
+useEffect(() => {
+  const v = videoRef.current;
+  if (!v) return;
+
+  // keep element in sync with React state
+  v.volume = volume;
+
+  // slider at 0 ⇒ muted; >0 ⇒ unmuted
+  const shouldMute = volume === 0;
+  if (v.muted !== shouldMute) v.muted = shouldMute;
+
+  // reflect any normalization back to UI
+  setIsMuted(v.muted);
+}, [volume]);
 
   const onVideoTogglePlay = async () => {
     const v = videoRef.current;
@@ -817,35 +834,35 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
 
         {/* volume slider */}
         <input
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={Math.round(volume * 100)}
-          onChange={(e) => {
-            const v = videoRef.current;
-            const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-            const vol = pct / 100;
-            setVolume(vol);
-            if (v) v.volume = vol;
-            // auto-sync mute with slider at 0 > muted, >0 > unmuted
-            const shouldMute = vol === 0;
-            if (v && v.muted !== shouldMute) v.muted = shouldMute;
-            setIsMuted(shouldMute);
-          }}
-          aria-label="Volume"
-          title="Volume"
-          style={{
-            WebkitAppearance: "none",
-            appearance: "none",
-            width: 90,
-            height: 4,
-            borderRadius: 2,
-            background: "rgba(255,255,255,.35)",
-            outline: "none",
-            cursor: "pointer",
-          }}
-        />
+  type="range"
+  min="0"
+  max="100"
+  step="1"
+  value={Math.round(volume * 100)}
+  onInput={(e) => {
+    const v = videoRef.current;
+    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+    const vol = pct / 100;
+    setVolume(vol);
+    if (v) v.volume = vol;
+    const shouldMute = vol === 0;
+    if (v && v.muted !== shouldMute) v.muted = shouldMute;
+    setIsMuted(shouldMute);
+  }}
+  onChange={() => {}} // keep for Safari consistency; logic already handled in onInput
+  aria-label="Volume"
+  title="Volume"
+  style={{
+    WebkitAppearance: "none",
+    appearance: "none",
+    width: 90,
+    height: 4,
+    borderRadius: 2,
+    background: "rgba(255,255,255,.35)",
+    outline: "none",
+    cursor: "pointer",
+  }}
+/>
 
         {/* settings (speed) */}
         <div style={fb.settingsWrap} ref={settingsRef}>
