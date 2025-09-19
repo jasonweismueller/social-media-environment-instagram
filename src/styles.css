@@ -735,6 +735,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
+
 /* --- Volume popover container (no dark box) --- */
 .fb-vol { position: relative; pointer-events: auto; }
 .fb-vol > button { position: relative; z-index: 10; }  /* keep button clickable */
@@ -748,45 +749,66 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-vol-pop.hide{ opacity:0; transform:translateX(-50%) translateY(6px) scale(.98); pointer-events:none; }
 
-.fb-vol-box{
-  width: 28px;              /* popover panel thickness */
-  height: 110px;            /* slider length */
-  display:grid; place-items:center;
-}
-
-/* ---- Tweak sizes here ---- */
+/* ---- Volume sizes & colors ---- */
 :root{
-  --vol-track: 4px;         /* thin track */
-  --vol-thumb: 8px;        /* small knob */
-  --vol-len: 100px;         /* usable length */
-  --vol-val: 100;           /* fill %, updated from JS */
+  --vol-len: 100px;          /* track length */
+  --vol-track: 4px;          /* track thickness */
+  --vol-thumb: 8px;          /* knob size */
+  --vol-pad: 6px;            /* vertical padding to keep round caps clean */
+
+  --vol-base: #1c1c1c;       /* empty (unfilled) track color – matches button bg */
+  --vol-fill: #1877f2;       /* filled color (blue); override inline when muted */
+  --vol-val: 100;            /* 0–100, set from JS */
 }
 
-/* ===== Chrome/Safari (WebKit) ===== */
+/* Holder for visual + input (same footprint) */
+.fb-vol-box{
+  position: relative;
+  width: 28px;                               /* panel thickness */
+  height: calc(var(--vol-len) + var(--vol-pad) * 2);
+  display: grid;
+  place-items: center;
+}
+
+/* Perfectly rounded pill behind the input */
+.fb-vol-visual{
+  position: absolute;
+  top: var(--vol-pad);
+  bottom: var(--vol-pad);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--vol-track);
+  border-radius: 999px;
+  background: var(--vol-base);
+  overflow: hidden;                          /* clip the fill to the rounded pill */
+}
+
+/* The fill (grows from bottom up), fully clipped inside the pill */
+.fb-vol-visual::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--vol-val) * 1%);
+  background: var(--vol-fill);
+}
+
+/* Native slider on top: transparent track; we only keep the thumb & input */
 .fb-vol-slider{
-  -webkit-appearance: slider-vertical !important; /* force vertical */
+  position: relative;
+  z-index: 1;
+  -webkit-appearance: slider-vertical !important;
   appearance: none;
-  width: 28px;                  /* control box thickness */
+  width: 28px;
   height: var(--vol-len);
   background: transparent;
-  padding: 0;
-  border: 0;
-  outline: none;
+  padding: 0; border: 0; outline: none;
   cursor: pointer;
-  accent-color: transparent;    /* kill blue default */
+  accent-color: transparent;
 }
 
-/* Make a centered skinny track with blue fill and dark unfilled */
-.fb-vol-slider::-webkit-slider-runnable-track{
-  height: 100%;
-  border-radius: 999px;
-  background:
-    /* filled part (bottom -> up, blue) */
-    linear-gradient(#1877f2, #1877f2) center bottom / var(--vol-track) calc(var(--vol-val)*1%) no-repeat,
-    /* base track (dark background) */
-    linear-gradient(#1c1c1c, #1c1c1c) center / var(--vol-track) 100% no-repeat;
-  background-color: transparent;
-}
+/* Hide native track visuals; keep hit-area */
+.fb-vol-slider::-webkit-slider-runnable-track{ background: transparent; border: 0; height: 100%; }
+.fb-vol-slider::-moz-range-track{ background: transparent; border: 0; }
 
 /* Small centered thumb (white) */
 .fb-vol-slider::-webkit-slider-thumb{
@@ -800,8 +822,16 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   box-shadow: 0 2px 10px rgba(0,0,0,.25);
   margin: 0;
 }
+.fb-vol-slider::-moz-range-thumb{
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
 
-/* ===== Firefox fallback (rotate) ===== */
+/* Firefox fallback (we don’t rely on its track visuals, just rotate) */
 @supports not (-webkit-appearance: slider-vertical) {
   .fb-vol-slider{
     -webkit-appearance: none; appearance: none;
@@ -810,50 +840,11 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
     transform: rotate(-90deg);
     transform-origin: center;
     background: transparent;
-    padding: 0; border: 0; outline: none; cursor: pointer;
-  }
-
-  /* draw a centered thin track with dark base */
-  .fb-vol-slider::-moz-range-track{
-    height: 100%;
-    border-radius: 999px;
-    background:
-      linear-gradient(
-        to right,
-        transparent calc(50% - var(--vol-track)/2),
-        #1c1c1c calc(50% - var(--vol-track)/2),
-        #1c1c1c calc(50% + var(--vol-track)/2),
-        transparent calc(50% + var(--vol-track)/2)
-      );
-  }
-
-  /* progress = filled center strip in blue */
-  .fb-vol-slider::-moz-range-progress{
-    height: 100%;
-    border-radius: 999px;
-    background:
-      linear-gradient(
-        to right,
-        transparent calc(50% - var(--vol-track)/2),
-        #1877f2 calc(50% - var(--vol-track)/2),
-        #1877f2 calc(50% + var(--vol-track)/2),
-        transparent calc(50% + var(--vol-track)/2)
-      );
-  }
-
-  .fb-vol-slider::-moz-range-thumb{
-    width: var(--vol-thumb);
-    height: var(--vol-thumb);
-    border-radius: 50%;
-    background: #fff;
-    border: 0;
-    box-shadow: 0 2px 10px rgba(0,0,0,.25);
-    margin: 0;
   }
 }
 
 /* Focus ring */
-.fb-vol-slider:focus-visible {
+.fb-vol-slider:focus-visible{
   outline: 2px solid rgba(255,255,255,.6);
   outline-offset: 2px;
 }
