@@ -857,44 +857,38 @@ useEffect(() => {
 {volOpen && (
   <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
     <div
-      className="fb-vol-box"
-      // One source of truth for the visual pill:
-      // - --vol-val  : 0–100%
-      // - --vol-fill : blue when >0, dark when muted/0
-      style={{
-        ['--vol-val']: Math.round(volume * 100),
-        ['--vol-fill']: (isMuted || volume === 0) ? 'rgba(0,0,0,.45)' : '#1877f2'
-      }}
-    >
-      <div className="fb-vol-visual" aria-hidden="true" />
-      <input
-        className="fb-vol-slider"
-        type="range"
-        min="0" max="100" step="1"
-        value={Math.round(volume * 100)}
-        aria-label="Volume"
-        aria-orientation="vertical"
-        onInput={(e) => {
-          const v = videoRef.current;
-          const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-          const vol = pct / 100;
+  className="fb-vol-box"
+  style={{
+    ['--vol-val']: Math.round(volume * 100),                   // 0–100
+    ['--vol-fill']: (isMuted || volume === 0) ? '#1c1c1c' : '#1877f2'
+  }}
+>
+  <div className="fb-vol-visual" aria-hidden="true" />
+  <input
+    className="fb-vol-slider"
+    type="range"
+    min="0" max="100" step="1"
+    value={Math.round(volume * 100)}
+    aria-label="Volume"
+    aria-orientation="vertical"
+    onInput={(e) => {
+      const v = videoRef.current;
+      const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+      const vol = pct / 100;
+      setVolume(vol);
+      if (v) v.volume = vol;
+      const shouldMute = vol === 0;
+      if (v && v.muted !== shouldMute) v.muted = shouldMute;
+      setIsMuted(shouldMute);
 
-          setVolume(vol);
-          if (v) v.volume = vol;
-
-          const shouldMute = vol === 0;
-          if (v && v.muted !== shouldMute) v.muted = shouldMute;
-          setIsMuted(shouldMute);
-
-          // Optional: instant visual update before React re-renders
-          e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
-          e.currentTarget.parentElement?.style.setProperty('--vol-fill',
-            (shouldMute ? 'rgba(0,0,0,.45)' : '#1877f2')
-          );
-        }}
-        onChange={() => {}}
-      />
-    </div>
+      // instant visual update (optional)
+      const host = e.currentTarget.parentElement;
+      host?.style.setProperty('--vol-val', String(pct));
+      host?.style.setProperty('--vol-fill', shouldMute ? '#1c1c1c' : '#1877f2');
+    }}
+    onChange={() => {}}
+  />
+</div>
   </div>
 )}
     </div>

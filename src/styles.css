@@ -848,3 +848,56 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   outline: 2px solid rgba(255,255,255,.6);
   outline-offset: 2px;
 }
+
+/* Kill the native track; we draw our own */
+.fb-vol-slider::-webkit-slider-runnable-track { background: transparent !important; }
+.fb-vol-slider::-moz-range-track { background: transparent !important; }
+.fb-vol-slider::-moz-range-progress { background: transparent !important; }
+
+/* Our visual pill (sits behind the slider) */
+.fb-vol-visual{
+  position: relative;
+  width: 12px;                     /* pill thickness */
+  height: var(--vol-len);
+  padding: 2px;                    /* inset so fill won't overshoot the caps */
+  border-radius: 999px;
+  background: #1c1c1c;             /* unfilled (dark) */
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.35),     /* subtle outline */
+    inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* The blue fill, clipped by the pill’s padding so it never overshoots */
+.fb-vol-visual::after{
+  content:"";
+  position: absolute;
+  left: 2px; right: 2px;           /* match .fb-vol-visual padding */
+  bottom: 2px;
+  height: calc(var(--vol-val) * 1% - 0px); /* 0–100% inside the padded area */
+  background: var(--vol-fill, #1877f2);
+  border-radius: 999px;
+  /* ensure it never shows negative on 0% due to calc */
+  transform-origin: bottom;
+}
+
+/* Thumb stays centered/small */
+.fb-vol-slider::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  margin: 0;
+}
+.fb-vol-slider::-moz-range-thumb{
+  width: var(--vol-thumb);
+  height: var(--vol-thumb);
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  margin: 0;
+}
