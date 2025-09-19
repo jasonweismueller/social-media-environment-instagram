@@ -855,12 +855,14 @@ useEffect(() => {
         {isMuted || volume === 0 ? "🔇" : "🔊"}
       </button>
 {volOpen && (
-  <div
+  <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
+   <div
   className="fb-vol-box"
   style={{
-    ['--vol-val']: Math.round(volume * 100),                 // 0–100
-    ['--vol-base']: 'rgba(255,255,255,.25)',                 // like play bar bg
-    ['--vol-fill']: '#fff'                                   // like play bar progress
+    ['--vol-val']: Math.round(volume * 100),
+    ['--vol-fill']: (isMuted || volume === 0) ? '#1c1c1c' : '#1877f2',
+    ['--vol-thumb']: '12px',         // <- keep the knob small
+    ['--vol-len']: '100px'
   }}
 >
   <div className="fb-vol-visual" aria-hidden="true" />
@@ -875,16 +877,13 @@ useEffect(() => {
       const v = videoRef.current;
       const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       const vol = pct / 100;
-
       setVolume(vol);
       if (v) v.volume = vol;
-
       const shouldMute = vol === 0;
       if (v && v.muted !== shouldMute) v.muted = shouldMute;
       setIsMuted(shouldMute);
-
-      // update only the fill amount; leave colors alone
       e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
+      e.currentTarget.parentElement?.style.setProperty('--vol-fill', shouldMute ? '#555' : '#fff');
     }}
     onChange={() => {}}
   />
