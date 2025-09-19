@@ -856,11 +856,13 @@ useEffect(() => {
       </button>
 {volOpen && (
   <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-    <div
+   <div
   className="fb-vol-box"
   style={{
-    ['--vol-val']: Math.round(volume * 100),                   // 0–100
-    ['--vol-fill']: (isMuted || volume === 0) ? '#1c1c1c' : '#1877f2'
+    ['--vol-val']: Math.round(volume * 100),
+    ['--vol-fill']: (isMuted || volume === 0) ? '#1c1c1c' : '#1877f2',
+    ['--vol-thumb']: '12px',         // <- keep the knob small
+    ['--vol-len']: '100px'
   }}
 >
   <div className="fb-vol-visual" aria-hidden="true" />
@@ -880,11 +882,8 @@ useEffect(() => {
       const shouldMute = vol === 0;
       if (v && v.muted !== shouldMute) v.muted = shouldMute;
       setIsMuted(shouldMute);
-
-      // instant visual update (optional)
-      const host = e.currentTarget.parentElement;
-      host?.style.setProperty('--vol-val', String(pct));
-      host?.style.setProperty('--vol-fill', shouldMute ? '#1c1c1c' : '#1877f2');
+      e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
+      e.currentTarget.parentElement?.style.setProperty('--vol-fill', shouldMute ? '#1c1c1c' : '#1877f2');
     }}
     onChange={() => {}}
   />
