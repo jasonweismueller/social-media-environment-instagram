@@ -835,21 +835,20 @@ useEffect(() => {
   }}
   onMouseLeave={() => {
     clearTimeout(volHideTimer.current);
-    volHideTimer.current = setTimeout(() => setVolOpen(false), 600); // hover-out delay
+    volHideTimer.current = setTimeout(() => setVolOpen(false), 600);
   }}
 >
   <button
     type="button"
-    style={fb.btn} 
+    style={fb.btn}                 // match other buttons’ style
     onClick={() => {
       const v = videoRef.current;
       if (!v) return;
       const next = !v.muted;
       v.muted = next;
       setIsMuted(next);
-      if (!next && v.volume === 0) { v.volume = 0.2; setVolume(0.2); }
+      if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
       click(next ? "video_mute" : "video_unmute");
-      // also toggle popover open on click (like FB)
       setVolOpen(true);
     }}
     aria-label={isMuted ? "Unmute" : "Mute"}
@@ -861,26 +860,27 @@ useEffect(() => {
 
   {volOpen && (
     <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-      <input
-        className="fb-vol-slider"
-        type="range"
-        min="0" max="100" step="1"
-        aria-label="Volume"
-        aria-orientation="vertical" 
-        value={Math.round(volume * 100)}
-        onInput={(e) => {
-          const v = videoRef.current;
-          const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-          const vol = pct / 100;
-          setVolume(vol);
-          if (v) v.volume = vol;
-          const shouldMute = vol === 0;
-          if (v && v.muted !== shouldMute) v.muted = shouldMute;
-          setIsMuted(shouldMute);
-        }}
-        onChange={() => {}}
-        title="Volume"
-      />
+      <div className="fb-vol-box">     {/* NEW: bounds the slider so it won't overlay the button */}
+        <input
+          className="fb-vol-slider"
+          type="range"
+          min="0" max="100" step="1"
+          value={Math.round(volume * 100)}
+          aria-label="Volume"
+          aria-orientation="vertical"
+          onInput={(e) => {
+            const v = videoRef.current;
+            const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+            const vol = pct / 100;
+            setVolume(vol);
+            if (v) v.volume = vol;
+            const shouldMute = vol === 0;
+            if (v && v.muted !== shouldMute) v.muted = shouldMute;
+            setIsMuted(shouldMute);
+          }}
+          onChange={() => {}}
+        />
+      </div>
     </div>
   )}
 </div>
