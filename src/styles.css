@@ -735,9 +735,12 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
+
+
+
 /* --- Volume popover container (no dark box) --- */
 .fb-vol { position: relative; pointer-events: auto; }
-.fb-vol > button { position: relative; z-index: 10; }  /* keep button clickable */
+.fb-vol > button { position: relative; z-index: 10; }
 
 .fb-vol-pop{
   position:absolute; bottom: calc(100% + 10px); left:50%;
@@ -751,27 +754,27 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 /* ---- Volume sizes & colors ---- */
 :root{
   --vol-len: 100px;          /* track length */
-  --vol-track: 4px;          /* track thickness */
+  --vol-track: 6px;          /* track thickness */
   --vol-thumb: 6px;          /* knob size */
   --vol-pad: 6px;            /* vertical padding to keep round caps clean */
 
-  --vol-base: #1c1c1c;       /* empty (unfilled) track color – matches button bg */
-  --vol-fill: #1877f2;       /* filled color (blue); override inline when muted */
+  --vol-base: #1c1c1c;       /* empty track */
+  --vol-fill: #1877f2;       /* filled color */
   --vol-val: 100;            /* 0–100, set from JS */
 }
 
-/* Holder for visual + input (same footprint) */
+/* Holder */
 .fb-vol-box{
   position: relative;
-  width: 28px;                               /* panel thickness */
+  width: 28px;
   height: calc(var(--vol-len) + var(--vol-pad) * 2);
   display: grid;
   place-items: center;
-  overflow: hidden;                           /* ← clip any native overshoot */
-  padding-block: var(--vol-pad);              /* keep thumb fully visible */
+  overflow: hidden;
+  padding-block: var(--vol-pad);
 }
 
-/* Perfectly rounded pill behind the input */
+/* Pill behind the input */
 .fb-vol-visual{
   position: absolute;
   top: var(--vol-pad);
@@ -781,45 +784,42 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   width: var(--vol-track);
   border-radius: 999px;
   background: var(--vol-base);
-  overflow: hidden;                           /* clip the blue/black fill */
-  pointer-events: none;                       /* clicks go to the input */
+  overflow: hidden;
+  pointer-events: none;
 }
-
-/* The fill (grows from bottom up), fully clipped inside the pill */
 .fb-vol-visual::after{
   content: "";
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: calc(var(--vol-val) * 1%);
   background: var(--vol-fill);
-  border-radius: inherit;                     /* rounded top cap */
+  border-radius: inherit;
   will-change: height;
 }
 
-/* Native slider on top: transparent track; we only keep the thumb & input */
+/* Native slider: keep vertical in WebKit/Blink */
 .fb-vol-slider{
   position: relative;
   z-index: 1;
-  -webkit-appearance: none !important;
+  -webkit-appearance: slider-vertical !important;  /* ← keep vertical */
   appearance: none;
   width: 28px;
   height: var(--vol-len);
-  margin-block: 0;
+  margin: 0;
   background: transparent !important;
   padding: 0; border: 0; outline: none;
   cursor: pointer;
-  accent-color: transparent !important;       /* kill blue accent */
+  accent-color: transparent !important;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Hard-reset native track paint */
+/* Kill native track visuals */
 .fb-vol-slider::-webkit-slider-runnable-track{
   -webkit-appearance: none !important;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
-  color: transparent !important;              /* prevent colored endcaps */
   height: 100%;
 }
 .fb-vol-slider::-moz-range-track{
@@ -827,8 +827,9 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   border: 0 !important;
   box-shadow: none !important;
 }
+.fb-vol-slider::-moz-range-progress{ background: transparent !important; }
 
-/* Small centered thumb (white) */
+/* Thumb */
 .fb-vol-slider::-webkit-slider-thumb{
   -webkit-appearance: none;
   appearance: none;
@@ -850,8 +851,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   margin: 0;
 }
 
-/* Firefox fallback (just rotate; visuals are ours) */
-@supports not (-webkit-appearance: none) {
+/* Firefox (no vertical slider): rotate the control */
+@supports not (-webkit-appearance: slider-vertical) {
   .fb-vol-slider{
     -webkit-appearance: none; appearance: none;
     width: calc(var(--vol-len) + var(--vol-thumb));
