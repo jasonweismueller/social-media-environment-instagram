@@ -738,10 +738,10 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 /* === FB-like volume popover === */
 .fb-vol { position: relative; pointer-events: auto; }
 
-/* Popover: compact + softer bg */
+/* Keep popover clearly above the button */
 .fb-vol-pop {
   position: absolute;
-  bottom: 130%;                 /* a bit higher so it never covers the button */
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(17,24,39,.92);
@@ -750,7 +750,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   border-radius: 10px;
   padding: 8px;
   box-shadow: 0 10px 24px rgba(0,0,0,.35);
-  z-index: 6;                   /* above controls */
+  z-index: 6;
   opacity: 1;
   transition: opacity .12s ease, transform .12s ease;
   transform-origin: bottom center;
@@ -763,61 +763,90 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   pointer-events: none;
 }
 
-/* Bounds the rotated slider so it won't spill over the button */
+/* A sized box so the rotated control has predictable bounds */
 .fb-vol-box {
-  width: 46px;                  /* slim panel */
-  height: 140px;                /* tall enough for full travel */
+  width: 48px;               /* thickness of panel */
+  height: 150px;             /* vertical travel space */
   display: grid;
   place-items: center;
   pointer-events: auto;
 }
 
-/* Vertical slider (rotate the horizontal control) */
-.fb-vol-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 120px;                 /* long side (pre-rotation) */
-  height: 36px;                 /* thick side (pre-rotation) */
-  transform: rotate(-90deg);    /* up = louder */
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-  padding: 0;
+/* ---------------------------------------------------------- */
+/* Preferred: native vertical slider (Chrome/Safari)          */
+/* ---------------------------------------------------------- */
+@supports (-webkit-appearance: slider-vertical) {
+  .fb-vol-slider {
+    -webkit-appearance: slider-vertical;
+    appearance: none;
+    display: block;
+    width: 36px;             /* thickness */
+    height: 120px;           /* length */
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    padding: 0;
+  }
+
+  .fb-vol-slider::-webkit-slider-runnable-track {
+    width: 8px;              /* track thickness */
+    height: 100%;
+    margin: 0 auto;          /* center in the 36px box */
+    background-color: rgba(255,255,255,.28);
+    border-radius: 999px;
+  }
+
+  .fb-vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: #fff;
+    border: 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    margin: 0;               /* centered on track */
+  }
 }
 
-/* Track */
-.fb-vol-slider::-webkit-slider-runnable-track {
-  width: 120px;
-  height: 8px;                  /* nice thick track */
-  background-color: rgba(255,255,255,.28);
-  border-radius: 999px;
-}
-.fb-vol-slider::-moz-range-track {
-  width: 120px;
-  height: 8px;
-  background-color: rgba(255,255,255,.28);
-  border-radius: 999px;
-}
+/* ---------------------------------------------------------- */
+/* Fallback: rotate a horizontal slider (Firefox/others)      */
+/* ---------------------------------------------------------- */
+@supports not (-webkit-appearance: slider-vertical) {
+  .fb-vol-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 140px;            /* long side pre-rotation */
+    height: 34px;            /* thick side pre-rotation */
+    transform: rotate(-90deg);
+    transform-origin: center;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+    padding: 0;
+  }
 
-/* Thumb — larger and centered */
-.fb-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: #fff;
-  border: 0;
-  box-shadow: 0 2px 10px rgba(0,0,0,.25);
-  margin-top: 0;                /* centered after rotation */
-}
-.fb-vol-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: #fff;
-  border: 0;
-  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  .fb-vol-slider::-webkit-slider-runnable-track,
+  .fb-vol-slider::-moz-range-track {
+    width: 140px;
+    height: 10px;            /* nice chunky track */
+    background-color: rgba(255,255,255,.28);
+    border-radius: 999px;
+  }
+
+  .fb-vol-slider::-webkit-slider-thumb,
+  .fb-vol-slider::-moz-range-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: #fff;
+    border: 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+    margin: 0;               /* keeps it centered after rotation */
+  }
 }
 
 /* Focus ring for accessibility */
@@ -826,7 +855,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   outline-offset: 2px;
 }
 
-/* Tiny arrow under the popover */
+/* Tiny arrow */
 .fb-vol-pop::after {
   content: "";
   position: absolute;
@@ -838,3 +867,6 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   border-color: rgba(17,24,39,.92) transparent transparent transparent;
   filter: drop-shadow(0 -1px 0 rgba(255,255,255,.12));
 }
+
+/* Ensure the button is never visually “under” the popover by accident */
+.fb-vol > button { position: relative; z-index: 7; }
