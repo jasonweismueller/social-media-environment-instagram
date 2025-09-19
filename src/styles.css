@@ -735,7 +735,6 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .fb-settings-item:hover{ background: rgba(255,255,255,.08); }
 .fb-settings-item.active{ background: rgba(255,255,255,.16); }
-
 /* --- Volume popover container (no dark box) --- */
 .fb-vol { position: relative; pointer-events: auto; }
 .fb-vol > button { position: relative; z-index: 10; }  /* keep button clickable */
@@ -768,6 +767,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   height: calc(var(--vol-len) + var(--vol-pad) * 2);
   display: grid;
   place-items: center;
+  overflow: hidden;                           /* ← clip any native overshoot */
+  padding-block: var(--vol-pad);              /* keep thumb fully visible */
 }
 
 /* Perfectly rounded pill behind the input */
@@ -780,8 +781,8 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   width: var(--vol-track);
   border-radius: 999px;
   background: var(--vol-base);
-  overflow: hidden;
-  pointer-events: none;          /* ← ensure clicks go to the input */
+  overflow: hidden;                           /* clip the blue/black fill */
+  pointer-events: none;                       /* clicks go to the input */
 }
 
 /* The fill (grows from bottom up), fully clipped inside the pill */
@@ -791,29 +792,41 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   left: 0; right: 0; bottom: 0;
   height: calc(var(--vol-val) * 1%);
   background: var(--vol-fill);
-  border-radius: inherit;        /* ← keeps the top cap nicely rounded */
-  will-change: height;           /* micro perf hint */
+  border-radius: inherit;                     /* rounded top cap */
+  will-change: height;
 }
 
 /* Native slider on top: transparent track; we only keep the thumb & input */
 .fb-vol-slider{
   position: relative;
   z-index: 1;
-  -webkit-appearance: slider-vertical !important;
+  -webkit-appearance: none !important;
   appearance: none;
   width: 28px;
   height: var(--vol-len);
-  background: transparent;
+  margin-block: 0;
+  background: transparent !important;
   padding: 0; border: 0; outline: none;
   cursor: pointer;
-  accent-color: transparent;
-  touch-action: none;            /* ← smoother drag on mobile */
-  -webkit-tap-highlight-color: transparent; /* ← remove blue flash on iOS */
+  accent-color: transparent !important;       /* kill blue accent */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Hide native track visuals; keep hit-area */
-.fb-vol-slider::-webkit-slider-runnable-track{ background: transparent; border: 0; height: 100%; }
-.fb-vol-slider::-moz-range-track{ background: transparent; border: 0; }
+/* Hard-reset native track paint */
+.fb-vol-slider::-webkit-slider-runnable-track{
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: transparent !important;              /* prevent colored endcaps */
+  height: 100%;
+}
+.fb-vol-slider::-moz-range-track{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
 
 /* Small centered thumb (white) */
 .fb-vol-slider::-webkit-slider-thumb{
@@ -834,17 +847,18 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   background: #fff;
   border: 0;
   box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  margin: 0;
 }
 
-/* Firefox fallback (we don’t rely on its track visuals, just rotate) */
-@supports not (-webkit-appearance: slider-vertical) {
+/* Firefox fallback (just rotate; visuals are ours) */
+@supports not (-webkit-appearance: none) {
   .fb-vol-slider{
     -webkit-appearance: none; appearance: none;
     width: calc(var(--vol-len) + var(--vol-thumb));
     height: 28px;
     transform: rotate(-90deg);
     transform-origin: center;
-    background: transparent;
+    background: transparent !important;
   }
 }
 
