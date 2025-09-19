@@ -753,7 +753,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 :root{
   --vol-len: 100px;          /* track length */
   --vol-track: 4px;          /* track thickness */
-  --vol-thumb: 8px;          /* knob size */
+  --vol-thumb: 6px;          /* knob size */
   --vol-pad: 6px;            /* vertical padding to keep round caps clean */
 
   --vol-base: #1c1c1c;       /* empty (unfilled) track color – matches button bg */
