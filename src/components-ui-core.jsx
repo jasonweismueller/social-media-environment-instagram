@@ -73,12 +73,16 @@ export const IconVolume = (p) => (
 
 export const IconVolumeMute = (p) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...p}>
-    <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor"/>
-    <path d="M15 9l5 5M20 9l-5 5" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2" 
-          strokeLinecap="round"/>
+    {/* speaker body */}
+    <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
+    {/* cross (shifted down 1, right 3) */}
+    <path
+      d="M20 12l5 5M25 12l-5 5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
