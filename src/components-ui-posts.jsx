@@ -7,7 +7,7 @@ import {
 import {
   IconBadge, IconDots, IconGlobe, IconInfo, IconUsers,
   IconThumb, IconComment, IconShare,
-  ActionBtn, PostText, Modal, NamesPeek, neutralAvatarDataUrl,
+  ActionBtn, PostText, Modal, NamesPeek, neutralAvatarDataUrl, IconVolume, IconVolumeMute,
 } from "./components-ui-core";
 
 /* --- In-view autoplay hook --- */
@@ -28,6 +28,8 @@ function useInViewAutoplay(threshold = 0.6) {
 
   return { wrapRef, inView };
 }
+
+
 
 /* ----------------------------- Post Card ---------------------------------- */
 export function PostCard({ post, onAction, disabled, registerViewRef, respectShowReactions = false }) {
@@ -837,22 +839,22 @@ useEffect(() => {
           }}
         >
           <button
-            type="button"
-            style={fb.btn}
-            onClick={() => {
-              const v = videoRef.current; if (!v) return;
-              const next = !v.muted;
-              v.muted = next; setIsMuted(next);
-              if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
-              click(next ? "video_mute" : "video_unmute");
-              setVolOpen(true);
-            }}
-            aria-label={isMuted ? "Unmute" : "Mute"}
-            title={isMuted ? "Unmute" : "Mute"}
-            disabled={disabled}
-          >
-            {isMuted || volume === 0 ? "🔇" : "🔊"}
-          </button>
+  type="button"
+  style={fb.btn}
+  onClick={() => {
+    const v = videoRef.current; if (!v) return;
+    const next = !v.muted;
+    v.muted = next; setIsMuted(next);
+    if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
+    click(next ? "video_mute" : "video_unmute");
+    setVolOpen(true);
+  }}
+  aria-label={isMuted ? "Unmute" : "Mute"}
+  title={isMuted ? "Unmute" : "Mute"}
+  disabled={disabled}
+>
+  {isMuted || volume === 0 ? <IconVolumeMute /> : <IconVolume />}
+</button>
 
           {volOpen && (
             <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>

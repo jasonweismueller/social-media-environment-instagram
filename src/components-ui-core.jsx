@@ -63,6 +63,21 @@ export const IconGlobe = (p) => (
   </svg>
 );
 
+export const IconVolume = (p) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...p}>
+    <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor"/>
+    <path d="M16 9.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M18.5 7a7 7 0 0 1 0 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+export const IconVolumeMute = (p) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...p}>
+    <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor"/>
+    <path d="M20 8l-6 6M14 8l6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
 /* ----------------------------- Small UI bits ------------------------------- */
 export function ActionBtn({ label, onClick, Icon, active, disabled, ...rest }) {
   return (
