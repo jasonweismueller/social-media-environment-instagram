@@ -856,15 +856,16 @@ useEffect(() => {
       </button>
 {volOpen && (
   <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-    <div
-      className="fb-vol-box"
-      style={{
-        ['--vol-val']: Math.round(volume * 100),   // 0–100
-        ['--vol-base']: 'rgba(255,255,255,.25)',   // match timeline bg
-        ['--vol-fill']: '#fff',                    // match timeline played
-      }}
-    >
-      <div className="fb-vol-visual" aria-hidden="true" />
+    <div className="fb-vol-box">
+      {/* put the vars on the visual itself */}
+      <div
+        className="fb-vol-visual"
+        aria-hidden="true"
+        style={{
+          ['--vol-val']: Math.round(volume * 100),
+          ['--vol-fill']: isMuted || volume === 0 ? '#1c1c1c' : '#fff'  // match progress bar (white when active)
+        }}
+      />
       <input
         className="fb-vol-slider"
         type="range"
@@ -884,8 +885,10 @@ useEffect(() => {
           if (v && v.muted !== shouldMute) v.muted = shouldMute;
           setIsMuted(shouldMute);
 
-          // Only update the percentage, not the colors
-          e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
+          // update the visual element directly (Safari-friendly)
+          const vis = e.currentTarget.previousElementSibling; // .fb-vol-visual
+          vis?.style.setProperty('--vol-val', String(pct));
+          vis?.style.setProperty('--vol-fill', shouldMute ? '#1c1c1c' : '#fff');
         }}
         onChange={() => {}}
       />
