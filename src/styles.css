@@ -753,28 +753,27 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 
 /* ---- Volume sizes & colors ---- */
 :root{
-  --vol-len: 100px;          /* track length */
-  --vol-track: 6px;          /* track thickness */
-  --vol-thumb: 6px;          /* knob size */
-  --vol-pad: 6px;            /* vertical padding to keep round caps clean */
+  --vol-len: 100px;
+  --vol-track: 4px;
+  --vol-thumb: 6px;
+  --vol-pad: 6px;
 
-  --vol-base: #555;       /* empty track */
-  --vol-fill: #fff;       /* filled color */
-  --vol-val: 100;            /* 0–100, set from JS */
+  /* Defaults now match the timeline: grey track + white fill */
+  --vol-base: rgba(255,255,255,.25);  /* unfilled */
+  --vol-fill: #fff;                   /* filled */
+  --vol-val: 100;
 }
 
-/* Holder */
+/* Holder for visual + input */
 .fb-vol-box{
   position: relative;
   width: 28px;
   height: calc(var(--vol-len) + var(--vol-pad) * 2);
   display: grid;
   place-items: center;
-  overflow: hidden;
-  padding-block: var(--vol-pad);
 }
 
-/* Pill behind the input */
+/* Rounded pill behind the input */
 .fb-vol-visual{
   position: absolute;
   top: var(--vol-pad);
@@ -783,53 +782,41 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   transform: translateX(-50%);
   width: var(--vol-track);
   border-radius: 999px;
-  background: var(--vol-base);
+  background: var(--vol-base);   /* <- grey */
   overflow: hidden;
   pointer-events: none;
 }
+
+/* Fill grows bottom-up; clipped inside pill */
 .fb-vol-visual::after{
   content: "";
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: calc(var(--vol-val) * 1%);
-  background: var(--vol-fill);
+  background: var(--vol-fill);   /* <- white */
   border-radius: inherit;
   will-change: height;
 }
 
-/* Native slider: keep vertical in WebKit/Blink */
+/* Native slider on top: transparent track; keep only thumb */
 .fb-vol-slider{
   position: relative;
   z-index: 1;
-  -webkit-appearance: slider-vertical !important;  /* ← keep vertical */
+  -webkit-appearance: slider-vertical !important;
   appearance: none;
   width: 28px;
   height: var(--vol-len);
-  margin: 0;
-  background: transparent !important;
+  background: transparent;
   padding: 0; border: 0; outline: none;
   cursor: pointer;
-  accent-color: transparent !important;
+  accent-color: transparent;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* Kill native track visuals */
-.fb-vol-slider::-webkit-slider-runnable-track{
-  -webkit-appearance: none !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  height: 100%;
-}
-.fb-vol-slider::-moz-range-track{
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
+.fb-vol-slider::-webkit-slider-runnable-track{ background: transparent; border: 0; height: 100%; }
+.fb-vol-slider::-moz-range-track{ background: transparent; border: 0; }
 .fb-vol-slider::-moz-range-progress{ background: transparent !important; }
 
-/* Thumb */
 .fb-vol-slider::-webkit-slider-thumb{
   -webkit-appearance: none;
   appearance: none;
@@ -851,7 +838,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   margin: 0;
 }
 
-/* Firefox (no vertical slider): rotate the control */
+/* Firefox fallback (rotate) */
 @supports not (-webkit-appearance: slider-vertical) {
   .fb-vol-slider{
     -webkit-appearance: none; appearance: none;
@@ -859,7 +846,7 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
     height: 28px;
     transform: rotate(-90deg);
     transform-origin: center;
-    background: transparent !important;
+    background: transparent;
   }
 }
 
