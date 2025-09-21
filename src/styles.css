@@ -773,36 +773,31 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   place-items: center;
 }
 
-/* Perfectly rounded pill behind the input (padded) */
+/* Perfectly rounded pill behind the input */
 .fb-vol-visual{
   position: absolute;
   top: var(--vol-pad);
   bottom: var(--vol-pad);
   left: 50%;
-  /* center without sub-pixel translate */
-  margin-left: calc(var(--vol-track) / -2);
+  margin-left: calc(var(--vol-track) / -2);   /* pixel-perfect centering */
   width: var(--vol-track);
-
-  /* padding creates an inner gutter so the fill never reaches the outer edge */
-  padding: 2px;
-
+  padding: 3px;                                /* inner gutter prevents bleed */
   border-radius: 999px;
   background: var(--vol-base);
-  overflow: hidden;
+  overflow: hidden;                            /* clip the fill to the pill */
   pointer-events: none;
 }
 
-/* Fill grows bottom-up, inset to stay fully inside the pill */
+/* Fill: inset and scale from the bottom (Safari-friendly) */
 .fb-vol-visual::after{
   content: "";
   position: absolute;
-  left: 2px;                /* match the padding above */
-  right: 2px;
-  bottom: 2px;
-  height: calc(var(--vol-val) * 1%);
-  background: var(--vol-fill);
+  inset: 3px;                                  /* matches padding above */
+  background: var(--vol-fill, #fff);           /* white like your progress */
   border-radius: 999px;
-  will-change: height;
+  transform-origin: bottom center;
+  transform: scaleY(calc(var(--vol-val, 100) / 100));
+  will-change: transform;
 }
 
 /* Native slider on top: transparent track; keep only thumb */
