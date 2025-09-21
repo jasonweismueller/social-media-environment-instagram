@@ -40,7 +40,7 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [playbackRate, setPlaybackRate] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
-  const [volume, setVolume] = useState(1); // start at full volume
+  const [volume, setVolume] = useState(0); // start at full volume
   // Volume popover state (hover-in open, hover-out delayed close with fade)
 const [volOpen, setVolOpen] = useState(false);
 const [volFading, setVolFading] = useState(false);
@@ -223,7 +223,7 @@ useEffect(() => {
 
   // start in a reliable autoplay state
   v.muted = true;
-  v.volume = volume; // apply initial volume
+  v.volume = 0; // apply initial volume
 
   const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
   const onTime      = () => setCurrent(v.currentTime || 0);
