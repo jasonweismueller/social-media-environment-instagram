@@ -29,8 +29,6 @@ function useInViewAutoplay(threshold = 0.6) {
   return { wrapRef, inView };
 }
 
-
-
 /* ----------------------------- Post Card ---------------------------------- */
 export function PostCard({ post, onAction, disabled, registerViewRef, respectShowReactions = false }) {
   const [reportAck, setReportAck] = useState(false);
@@ -42,26 +40,25 @@ export function PostCard({ post, onAction, disabled, registerViewRef, respectSho
   const [playbackRate, setPlaybackRate] = useState(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
-  const [volume, setVolume] = useState(0); // start at full volume
+  const [volume, setVolume] = useState(0); // start muted visually & logically
   // Volume popover state (hover-in open, hover-out delayed close with fade)
-const [volOpen, setVolOpen] = useState(false);
-const [volFading, setVolFading] = useState(false);
-const volHideTimer = useRef(null);
+  const [volOpen, setVolOpen] = useState(false);
+  const [volFading, setVolFading] = useState(false);
+  const volHideTimer = useRef(null);
 
-// cleanup
-useEffect(() => () => clearTimeout(volHideTimer.current), []);
+  // cleanup
+  useEffect(() => () => clearTimeout(volHideTimer.current), []);
 
-// when closing, briefly apply the fade class
-useEffect(() => {
-  if (volOpen) {
-    setVolFading(false);
-    return;
-  }
-  setVolFading(true);
-  const t = setTimeout(() => setVolFading(false), 180); // match your CSS transition
-  return () => clearTimeout(t);
-}, [volOpen]);
-
+  // when closing, briefly apply the fade class
+  useEffect(() => {
+    if (volOpen) {
+      setVolFading(false);
+      return;
+    }
+    setVolFading(true);
+    const t = setTimeout(() => setVolFading(false), 180); // match your CSS transition
+    return () => clearTimeout(t);
+  }, [volOpen]);
 
   // Participant comment (this session)
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
@@ -217,60 +214,59 @@ useEffect(() => {
     return `${m}:${sec}`;
   };
 
-  // wire native video events
-// A) After your "wire native video events" useEffect, REPLACE that effect body with this:
-useEffect(() => {
-  const v = videoRef.current;
-  if (!v) return;
+  // wire native video events (mount-only)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
 
-  // start in a reliable autoplay state
-  v.muted = true;
-  v.volume = 0; // apply initial volume
+    // start in a reliable autoplay state
+    v.muted = true;
+    v.volume = 0; // apply initial volume
 
-  const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
-  const onTime      = () => setCurrent(v.currentTime || 0);
-  const onProg      = () => { try { const b = v.buffered; if (b.length) setBufferedEnd(b.end(b.length - 1)); } catch {} };
-  const onPlay      = () => setIsVideoPlaying(true);
-  const onPause     = () => setIsVideoPlaying(false);
+    const onLoadedMeta = () => setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+    const onTime      = () => setCurrent(v.currentTime || 0);
+    const onProg      = () => { try { const b = v.buffered; if (b.length) setBufferedEnd(b.end(b.length - 1)); } catch {} };
+    const onPlay      = () => setIsVideoPlaying(true);
+    const onPause     = () => setIsVideoPlaying(false);
 
-  // NEW: keep React state in sync with element changes
-  const onVol       = () => {
-    setVolume(v.volume);
+    // keep React state in sync with element changes
+    const onVol       = () => {
+      setVolume(v.volume);
+      setIsMuted(v.muted);
+    };
+
+    v.addEventListener("loadedmetadata", onLoadedMeta);
+    v.addEventListener("timeupdate", onTime);
+    v.addEventListener("progress", onProg);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("volumechange", onVol);
+
+    return () => {
+      v.removeEventListener("loadedmetadata", onLoadedMeta);
+      v.removeEventListener("timeupdate", onTime);
+      v.removeEventListener("progress", onProg);
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("volumechange", onVol);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    // keep element in sync with React state
+    v.volume = volume;
+
+    // slider at 0 ⇒ muted; >0 ⇒ unmuted
+    const shouldMute = volume === 0;
+    if (v.muted !== shouldMute) v.muted = shouldMute;
+
+    // reflect any normalization back to UI
     setIsMuted(v.muted);
-  };
-
-  v.addEventListener("loadedmetadata", onLoadedMeta);
-  v.addEventListener("timeupdate", onTime);
-  v.addEventListener("progress", onProg);
-  v.addEventListener("play", onPlay);
-  v.addEventListener("pause", onPause);
-  v.addEventListener("volumechange", onVol);
-
-  return () => {
-    v.removeEventListener("loadedmetadata", onLoadedMeta);
-    v.removeEventListener("timeupdate", onTime);
-    v.removeEventListener("progress", onProg);
-    v.removeEventListener("play", onPlay);
-    v.removeEventListener("pause", onPause);
-    v.removeEventListener("volumechange", onVol);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []); // mount-only; we don't want to rebind handlers on every render
-
-useEffect(() => {
-  const v = videoRef.current;
-  if (!v) return;
-
-  // keep element in sync with React state
-  v.volume = volume;
-
-  // slider at 0 ⇒ muted; >0 ⇒ unmuted
-  const shouldMute = volume === 0;
-  if (v.muted !== shouldMute) v.muted = shouldMute;
-
-  // reflect any normalization back to UI
-  setIsMuted(v.muted);
-}, [volume]);
+  }, [volume]);
 
   const onVideoTogglePlay = async () => {
     const v = videoRef.current;
@@ -448,7 +444,7 @@ useEffect(() => {
   // --- GHOST SHOW/HIDE RULES ---
   const shouldShowGhosts = showReactions && baseCommentCount > 0;
 
-  // Inline styles for FB-like controls (no external CSS needed)
+  // Inline styles for FB-like controls (minus button box/background)
   const fb = {
     wrap: { position: "relative" },
     bottom: {
@@ -482,20 +478,7 @@ useEffect(() => {
     }),
     row: { display: "flex", alignItems: "center", justifyContent: "space-between" },
     time: { fontSize: 12, fontWeight: 600, textShadow: "0 1px 2px rgba(0,0,0,.5)" },
-    btn: {
-      border: 0,
-      background: "rgba(0,0,0,.45)",
-      color: "#fff",
-      width: 32,
-      height: 28,
-      borderRadius: 6,
-      display: "grid",
-      placeItems: "center",
-      cursor: "pointer",
-      fontSize: 14,
-      lineHeight: 1,
-      pointerEvents: "auto"
-    },
+    // NOTE: removed fb.btn — we now use className="fb-btn" so CSS controls the look
     settingsWrap: { position: "relative", pointerEvents: "auto" },
     menu: {
       position: "absolute",
@@ -748,197 +731,197 @@ useEffect(() => {
               style={fb.wrap}
             >
               <video
-  ref={videoRef}
-  className="video-el"
-  src={u}
-  poster={post.videoPosterUrl || undefined}
-  playsInline
-  muted={isMuted}
-  autoPlay={inView}
-  preload="auto"
-  loop={!!post.videoLoop}
-  onPlay={() => setIsVideoPlaying(true)}
-  onPause={() => setIsVideoPlaying(false)}
-  onEnded={onVideoEnded}
-  controls={!!post.videoShowControls}
-  disablePictureInPicture
-  controlsList="nodownload noremoteplayback"
-  style={{
-    display: "block",
-    width: "auto",
-    height: "auto",
-    maxWidth: "100%",
-    maxHeight: "min(78vh, 600px)",
-    objectFit: "contain",
-    background: "#000",
-    margin: "0 auto",
-    cursor: "pointer", // 👈 makes it feel clickable
-  }}
-  // 👇 New: toggle play/pause like FB
-  onClick={onVideoTogglePlay}
-  role="button"
-  tabIndex={0}
-  onKeyDown={(e) => {
-    if (e.key === " " || e.key === "Enter") {
-      e.preventDefault();
-      onVideoTogglePlay();
-    }
-  }}
-/>
+                ref={videoRef}
+                className="video-el"
+                src={u}
+                poster={post.videoPosterUrl || undefined}
+                playsInline
+                muted={isMuted}
+                autoPlay={inView}
+                preload="auto"
+                loop={!!post.videoLoop}
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+                onEnded={onVideoEnded}
+                controls={!!post.videoShowControls}
+                disablePictureInPicture
+                controlsList="nodownload noremoteplayback"
+                style={{
+                  display: "block",
+                  width: "auto",
+                  height: "auto",
+                  maxWidth: "100%",
+                  maxHeight: "min(78vh, 600px)",
+                  objectFit: "contain",
+                  background: "#000",
+                  margin: "0 auto",
+                  cursor: "pointer",
+                }}
+                // toggle play/pause like FB
+                onClick={onVideoTogglePlay}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    onVideoTogglePlay();
+                  }
+                }}
+              />
 
               {/* FB-like bottom bar when using custom controls */}
-{!post.videoShowControls && (
-  <div style={fb.bottom}>
-    <div className="fb-ctrls">
-      {/* LEFT: play + time */}
-      <div className="fb-ctrl-left">
-        <button
-          type="button"
-          style={fb.btn}
-          onClick={onVideoTogglePlay}
-          aria-label={isVideoPlaying ? "Pause" : "Play"}
-          title={isVideoPlaying ? "Pause" : "Play"}
-          disabled={disabled}
-        >
-          {isVideoPlaying ? "❚❚" : "▶"}
-        </button>
+              {!post.videoShowControls && (
+                <div style={fb.bottom}>
+                  <div className="fb-ctrls">
+                    {/* LEFT: play + time */}
+                    <div className="fb-ctrl-left">
+                      <button
+                        type="button"
+                        className="fb-btn"
+                        onClick={onVideoTogglePlay}
+                        aria-label={isVideoPlaying ? "Pause" : "Play"}
+                        title={isVideoPlaying ? "Pause" : "Play"}
+                        disabled={disabled}
+                      >
+                        {isVideoPlaying ? "❚❚" : "▶"}
+                      </button>
 
-        <div style={fb.time} aria-label={`Time ${fmtTime(current)} of ${fmtTime(duration)}`}>
-          {fmtTime(current)} / {fmtTime(duration)}
-        </div>
-      </div>
+                      <div style={fb.time} aria-label={`Time ${fmtTime(current)} of ${fmtTime(duration)}`}>
+                        {fmtTime(current)} / {fmtTime(duration)}
+                      </div>
+                    </div>
 
-      {/* CENTER: inline progress */}
-      <div
-        className="fb-progress-inline"
-        role="slider"
-        aria-valuemin={0}
-        aria-valuemax={Math.round(duration || 0)}
-        aria-valuenow={Math.round(current || 0)}
-        aria-label="Video progress"
-        tabIndex={0}
-        onClick={handleBarClick}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") { seekTo(current - 5); e.preventDefault(); }
-          if (e.key === "ArrowRight") { seekTo(current + 5); e.preventDefault(); }
-        }}
-        title="Seek"
-      >
-        <div style={fb.progBuffered(bufferedPct)} />
-        <div style={fb.progPlayed(playedPct)} />
-      </div>
+                    {/* CENTER: inline progress */}
+                    <div
+                      className="fb-progress-inline"
+                      role="slider"
+                      aria-valuemin={0}
+                      aria-valuemax={Math.round(duration || 0)}
+                      aria-valuenow={Math.round(current || 0)}
+                      aria-label="Video progress"
+                      tabIndex={0}
+                      onClick={handleBarClick}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowLeft") { seekTo(current - 5); e.preventDefault(); }
+                        if (e.key === "ArrowRight") { seekTo(current + 5); e.preventDefault(); }
+                      }}
+                      title="Seek"
+                    >
+                      <div style={fb.progBuffered(bufferedPct)} />
+                      <div style={fb.progPlayed(playedPct)} />
+                    </div>
 
-      {/* RIGHT: volume popover, settings, fullscreen */}
-      <div className="fb-ctrl-right">
-        <div
-          className="fb-vol"
-          onMouseEnter={() => { clearTimeout(volHideTimer.current); setVolOpen(true); }}
-          onMouseLeave={() => {
-            clearTimeout(volHideTimer.current);
-            volHideTimer.current = setTimeout(() => setVolOpen(false), 600);
-          }}
-        >
-          <button
-  type="button"
-  style={fb.btn}
-  onClick={() => {
-    const v = videoRef.current; if (!v) return;
-    const next = !v.muted;
-    v.muted = next; setIsMuted(next);
-    if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
-    click(next ? "video_mute" : "video_unmute");
-    setVolOpen(true);
-  }}
-  aria-label={isMuted ? "Unmute" : "Mute"}
-  title={isMuted ? "Unmute" : "Mute"}
-  disabled={disabled}
->
-  {isMuted || volume === 0 ? <IconVolumeMute /> : <IconVolume />}
-</button>
+                    {/* RIGHT: volume popover, settings, fullscreen */}
+                    <div className="fb-ctrl-right">
+                      <div
+                        className="fb-vol"
+                        onMouseEnter={() => { clearTimeout(volHideTimer.current); setVolOpen(true); }}
+                        onMouseLeave={() => {
+                          clearTimeout(volHideTimer.current);
+                          volHideTimer.current = setTimeout(() => setVolOpen(false), 600);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="fb-btn"
+                          onClick={() => {
+                            const v = videoRef.current; if (!v) return;
+                            const next = !v.muted;
+                            v.muted = next; setIsMuted(next);
+                            if (!next && v.volume === 0) { v.volume = 0.25; setVolume(0.25); }
+                            click(next ? "video_mute" : "video_unmute");
+                            setVolOpen(true);
+                          }}
+                          aria-label={isMuted ? "Unmute" : "Mute"}
+                          title={isMuted ? "Unmute" : "Mute"}
+                          disabled={disabled}
+                        >
+                          {isMuted || volume === 0 ? <IconVolumeMute /> : <IconVolume />}
+                        </button>
 
-          {volOpen && (
-            <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-              <div className="fb-vol-box">
-                <div
-                  className="fb-vol-visual"
-                  aria-hidden="true"
-                  style={{
-                    ['--vol-val']: Math.round(volume * 100),
-                    ['--vol-fill']: isMuted || volume === 0 ? 'rgba(255,255,255,.25)' : '#fff'
-                  }}
-                />
-                <input
-                  className="fb-vol-slider"
-                  type="range"
-                  min="0" max="100" step="1"
-                  value={Math.round(volume * 100)}
-                  aria-label="Volume"
-                  aria-orientation="vertical"
-                  onInput={(e) => {
-                    const v = videoRef.current;
-                    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                    const vol = pct / 100;
-                    setVolume(vol);
-                    if (v) v.volume = vol;
-                    const shouldMute = vol === 0;
-                    if (v && v.muted !== shouldMute) v.muted = shouldMute;
-                    setIsMuted(shouldMute);
-                    const vis = e.currentTarget.previousElementSibling;
-                    vis?.style.setProperty('--vol-val', String(pct));
-                    vis?.style.setProperty('--vol-fill', shouldMute ? 'rgba(255,255,255,.25)' : '#fff');
-                  }}
-                  onChange={() => {}}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+                        {volOpen && (
+                          <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
+                            <div className="fb-vol-box">
+                              <div
+                                className="fb-vol-visual"
+                                aria-hidden="true"
+                                style={{
+                                  ['--vol-val']: Math.round(volume * 100),
+                                  ['--vol-fill']: isMuted || volume === 0 ? 'rgba(255,255,255,.25)' : '#fff'
+                                }}
+                              />
+                              <input
+                                className="fb-vol-slider"
+                                type="range"
+                                min="0" max="100" step="1"
+                                value={Math.round(volume * 100)}
+                                aria-label="Volume"
+                                aria-orientation="vertical"
+                                onInput={(e) => {
+                                  const v = videoRef.current;
+                                  const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                                  const vol = pct / 100;
+                                  setVolume(vol);
+                                  if (v) v.volume = vol;
+                                  const shouldMute = vol === 0;
+                                  if (v && v.muted !== shouldMute) v.muted = shouldMute;
+                                  setIsMuted(shouldMute);
+                                  const vis = e.currentTarget.previousElementSibling;
+                                  vis?.style.setProperty('--vol-val', String(pct));
+                                  vis?.style.setProperty('--vol-fill', shouldMute ? 'rgba(255,255,255,.25)' : '#fff');
+                                }}
+                                onChange={() => {}}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
-        <div style={fb.settingsWrap} ref={settingsRef}>
-          <button
-            type="button"
-            style={fb.btn}
-            aria-haspopup="menu"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen(o => !o)}
-            title="Settings"
-            disabled={disabled}
-          >
-            ⚙
-          </button>
-          {settingsOpen && (
-            <div style={fb.menu} role="menu">
-              {[0.5, 1, 1.25, 1.5, 2].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="menuitem"
-                  style={fb.menuBtn(r === playbackRate)}
-                  onClick={() => setRate(r)}
-                  title={`${r}×`}
-                  disabled={disabled}
-                >
-                  {r}× {r === playbackRate ? "✓" : ""}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+                      <div style={fb.settingsWrap} ref={settingsRef}>
+                        <button
+                          type="button"
+                          className="fb-btn"
+                          aria-haspopup="menu"
+                          aria-expanded={settingsOpen}
+                          onClick={() => setSettingsOpen(o => !o)}
+                          title="Settings"
+                          disabled={disabled}
+                        >
+                          ⚙
+                        </button>
+                        {settingsOpen && (
+                          <div style={fb.menu} role="menu">
+                            {[0.5, 1, 1.25, 1.5, 2].map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                role="menuitem"
+                                style={fb.menuBtn(r === playbackRate)}
+                                onClick={() => setRate(r)}
+                                title={`${r}×`}
+                                disabled={disabled}
+                              >
+                                {r}× {r === playbackRate ? "✓" : ""}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-        <button
-          type="button"
-          style={fb.btn}
-          onClick={toggleFullscreen}
-          aria-label="Fullscreen"
-          title="Fullscreen"
-          disabled={disabled}
-        >
-          ⛶
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+                      <button
+                        type="button"
+                        className="fb-btn"
+                        onClick={toggleFullscreen}
+                        aria-label="Fullscreen"
+                        title="Fullscreen"
+                        disabled={disabled}
+                      >
+                        ⛶
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()
