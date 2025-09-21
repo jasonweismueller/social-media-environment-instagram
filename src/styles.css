@@ -690,20 +690,18 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
 }
 .video-wrap:hover .fb-controls{ opacity:1; pointer-events:auto; }
 
-.fb-btn{
-  border:0;
-  background:transparent;
-  color:#fff;
-  font-size:14px;
-  height:28px;
-  min-width:28px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:6px;
-  cursor:pointer;
+.fb-btn {
+  background: none;        /* remove dark background */
+  box-shadow: none;        /* remove 3D effect */
+  border: none;            /* no borders */
+  color: white;            /* icons/text show as flat white */
+  padding: 4px;            /* small click/tap area */
+  border-radius: 0;        /* remove pill/circle */
 }
-.fb-btn:hover{ background: rgba(255,255,255,.12); }
+
+.fb-btn:hover {
+  background: rgba(255,255,255,0.1); /* optional subtle hover highlight */
+}
 
 .fb-spacer{ flex:1; }
 
