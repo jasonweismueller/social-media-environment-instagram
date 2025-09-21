@@ -862,3 +862,24 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   outline: 2px solid rgba(255,255,255,.6);
   outline-offset: 2px;
 }
+
+/* --- Inline controls row (time | progress | mute/settings/fs) --- */
+.fb-ctrls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  pointer-events:auto; /* make the row interactive */
+}
+.fb-ctrl-left{ display:flex; align-items:center; gap:6px; }
+.fb-ctrl-right{ display:flex; align-items:center; gap:6px; }
+
+/* Seek/timeline that sits inline between the left and right clusters */
+.fb-progress-inline{
+  flex:1;
+  position:relative;
+  height:6px;
+  border-radius:999px;
+  background: rgba(255,255,255,.25); /* same as your top progress track */
+  cursor:pointer;
+  overflow:hidden;
+}
