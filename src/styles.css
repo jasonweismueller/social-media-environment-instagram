@@ -773,28 +773,35 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   place-items: center;
 }
 
-/* Rounded pill behind the input */
+/* Perfectly rounded pill behind the input (padded) */
 .fb-vol-visual{
   position: absolute;
   top: var(--vol-pad);
   bottom: var(--vol-pad);
   left: 50%;
-  transform: translateX(-50%);
+  /* center without sub-pixel translate */
+  margin-left: calc(var(--vol-track) / -2);
   width: var(--vol-track);
+
+  /* padding creates an inner gutter so the fill never reaches the outer edge */
+  padding: 2px;
+
   border-radius: 999px;
-  background: var(--vol-base);   /* <- grey */
+  background: var(--vol-base);
   overflow: hidden;
   pointer-events: none;
 }
 
-/* Fill grows bottom-up; clipped inside pill */
+/* Fill grows bottom-up, inset to stay fully inside the pill */
 .fb-vol-visual::after{
   content: "";
   position: absolute;
-  left: 0; right: 0; bottom: 0;
+  left: 2px;                /* match the padding above */
+  right: 2px;
+  bottom: 2px;
   height: calc(var(--vol-val) * 1%);
-  background: var(--vol-fill);   /* <- white */
-  border-radius: inherit;
+  background: var(--vol-fill);
+  border-radius: 999px;
   will-change: height;
 }
 
