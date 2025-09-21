@@ -856,38 +856,40 @@ useEffect(() => {
       </button>
 {volOpen && (
   <div className={`fb-vol-pop${volFading ? " hide" : ""}`}>
-   <div
-  className="fb-vol-box"
-  style={{
-    ['--vol-val']: Math.round(volume * 100),
-    ['--vol-fill']: (isMuted || volume === 0) ? '#1c1c1c' : '#1877f2',
-    ['--vol-thumb']: '12px',         // <- keep the knob small
-    ['--vol-len']: '100px'
-  }}
->
-  <div className="fb-vol-visual" aria-hidden="true" />
-  <input
-    className="fb-vol-slider"
-    type="range"
-    min="0" max="100" step="1"
-    value={Math.round(volume * 100)}
-    aria-label="Volume"
-    aria-orientation="vertical"
-    onInput={(e) => {
-      const v = videoRef.current;
-      const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-      const vol = pct / 100;
-      setVolume(vol);
-      if (v) v.volume = vol;
-      const shouldMute = vol === 0;
-      if (v && v.muted !== shouldMute) v.muted = shouldMute;
-      setIsMuted(shouldMute);
-      e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
-      e.currentTarget.parentElement?.style.setProperty('--vol-fill', shouldMute ? '#555' : '#fff');
-    }}
-    onChange={() => {}}
-  />
-</div>
+    <div
+      className="fb-vol-box"
+      style={{
+        ['--vol-val']: Math.round(volume * 100),   // 0–100
+        ['--vol-base']: 'rgba(255,255,255,.25)',   // match timeline bg
+        ['--vol-fill']: '#fff',                    // match timeline played
+      }}
+    >
+      <div className="fb-vol-visual" aria-hidden="true" />
+      <input
+        className="fb-vol-slider"
+        type="range"
+        min="0" max="100" step="1"
+        value={Math.round(volume * 100)}
+        aria-label="Volume"
+        aria-orientation="vertical"
+        onInput={(e) => {
+          const v = videoRef.current;
+          const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+          const vol = pct / 100;
+
+          setVolume(vol);
+          if (v) v.volume = vol;
+
+          const shouldMute = vol === 0;
+          if (v && v.muted !== shouldMute) v.muted = shouldMute;
+          setIsMuted(shouldMute);
+
+          // Only update the percentage, not the colors
+          e.currentTarget.parentElement?.style.setProperty('--vol-val', String(pct));
+        }}
+        onChange={() => {}}
+      />
+    </div>
   </div>
 )}
     </div>
