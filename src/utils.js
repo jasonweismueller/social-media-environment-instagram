@@ -37,6 +37,104 @@ export const toggleInSet = (setObj, id) => {
   return next;
 };
 
+/* ======================= Admin User Management APIs ======================= */
+/**
+ * Backend is expected to support actions:
+ *  - admin_list_users                → { ok: true, users: [{email, role, disabled}] }
+ *  - admin_create_user               → { ok: true }
+ *  - admin_update_user               → { ok: true }
+ *  - admin_delete_user               → { ok: true }
+ *
+ * All require admin_token (owner level for create/update/delete).
+ */
+
+export async function adminListUsers() {
+  const admin_token = getAdminToken();
+  if (!admin_token) return { ok: false, err: "admin auth required" };
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({ action: "admin_list_users", admin_token }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) return { ok: false, err: data?.err || `HTTP ${res.status}` };
+    return { ok: true, users: Array.isArray(data.users) ? data.users : [] };
+  } catch (e) {
+    return { ok: false, err: String(e.message || e) };
+  }
+}
+
+export async function adminCreateUser(email, password, role = "viewer") {
+  const admin_token = getAdminToken();
+  if (!admin_token) return { ok: false, err: "admin auth required" };
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({
+        action: "admin_create_user",
+        admin_token,
+        email,
+        password,
+        role,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) return { ok: false, err: data?.err || `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: String(e.message || e) };
+  }
+}
+
+export async function adminUpdateUser({ email, role, password, disabled }) {
+  const admin_token = getAdminToken();
+  if (!admin_token) return { ok: false, err: "admin auth required" };
+  try {
+    const payload = { action: "admin_update_user", admin_token, email };
+    if (role != null) payload.role = role;
+    if (password != null) payload.password = password;
+    if (typeof disabled === "boolean") payload.disabled = !!disabled;
+
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) return { ok: false, err: data?.err || `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: String(e.message || e) };
+  }
+}
+
+export async function adminDeleteUser(email) {
+  const admin_token = getAdminToken();
+  if (!admin_token) return { ok: false, err: "admin auth required" };
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({
+        action: "admin_delete_user",
+        admin_token,
+        email,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) return { ok: false, err: data?.err || `HTTP ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: String(e.message || e) };
+  }
+}
+
 /* --------------------- Reactions helpers ---------------------------------- */
 export const REACTION_META = {
   like:  { emoji: "👍", label: "Like"  },
@@ -207,39 +305,71 @@ async function getJsonWithRetry(url, opts = {}, { retries = 1, timeoutMs = 8000 
 }
 
 /* --------------------- Admin auth (session token) ------------------------- */
-const ADMIN_TOKEN_KEY = "fb_admin_token_v1";
+/* --------------------- Admin auth (session token + role/email) ------------- */
+const ADMIN_TOKEN_KEY     = "fb_admin_token_v1";
 const ADMIN_TOKEN_EXP_KEY = "fb_admin_token_exp_v1";
+const ADMIN_ROLE_KEY      = "fb_admin_role_v1";
+const ADMIN_EMAIL_KEY     = "fb_admin_email_v1";
 
-function setAdminToken(token, ttlSec) {
+// role rank helper
+const ROLE_RANK = { viewer: 1, editor: 2, owner: 3 };
+
+export function hasAdminRole(minRole = "viewer") {
+  const r = (getAdminRole() || "viewer").toLowerCase();
+  return (ROLE_RANK[r] || 0) >= (ROLE_RANK[minRole] || 0);
+}
+
+/** Save admin session returned by backend. Shape: { token, ttlSec, role, email } */
+export function setAdminSession({ token, ttlSec, role, email } = {}) {
   try {
-    if (!token) {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-      localStorage.removeItem(ADMIN_TOKEN_EXP_KEY);
-      return;
-    }
+    if (!token) { clearAdminSession(); return; }
     localStorage.setItem(ADMIN_TOKEN_KEY, token);
     if (Number.isFinite(Number(ttlSec)) && ttlSec > 0) {
       localStorage.setItem(ADMIN_TOKEN_EXP_KEY, String(Date.now() + Number(ttlSec) * 1000));
     } else {
       localStorage.removeItem(ADMIN_TOKEN_EXP_KEY);
     }
+    if (role)  localStorage.setItem(ADMIN_ROLE_KEY, String(role));
+    if (email) localStorage.setItem(ADMIN_EMAIL_KEY, String(email));
   } catch {}
 }
+
+export function clearAdminSession() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_EXP_KEY);
+  localStorage.removeItem(ADMIN_ROLE_KEY);
+  localStorage.removeItem(ADMIN_EMAIL_KEY);
+}
+
 export function getAdminToken() {
   try {
     const t = localStorage.getItem(ADMIN_TOKEN_KEY);
     const exp = Number(localStorage.getItem(ADMIN_TOKEN_EXP_KEY) || "");
     if (!t || !t.trim()) return null;
-    if (exp && Date.now() > exp) {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-      localStorage.removeItem(ADMIN_TOKEN_EXP_KEY);
-      return null;
-    }
+    if (exp && Date.now() > exp) { clearAdminSession(); return null; }
     return t;
   } catch { return null; }
 }
-export function hasAdminSession() { return !!getAdminToken(); }
-export function clearAdminToken() { setAdminToken(""); }
+
+export function getAdminRole() {
+  try {
+    const exp = Number(localStorage.getItem(ADMIN_TOKEN_EXP_KEY) || "");
+    if (exp && Date.now() > exp) { clearAdminSession(); return "viewer"; }
+    return (localStorage.getItem(ADMIN_ROLE_KEY) || "viewer").toLowerCase();
+  } catch { return "viewer"; }
+}
+
+export function getAdminEmail() {
+  try {
+    const exp = Number(localStorage.getItem(ADMIN_TOKEN_EXP_KEY) || "");
+    if (exp && Date.now() > exp) { clearAdminSession(); return null; }
+    return localStorage.getItem(ADMIN_EMAIL_KEY) || null;
+  } catch { return null; }
+}
+
+export function hasAdminSession() {
+  return !!getAdminToken();
+}
 
 export async function adminLogin(password) {
   try {
@@ -249,24 +379,49 @@ export async function adminLogin(password) {
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({ action: "admin_login", password }),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      return { ok: false, err: `HTTP ${res.status} ${txt || ""}`.trim() };
-    }
     const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.admin_token) {
-      setAdminToken(data.admin_token, data.ttl_s || data.ttl_sec || null);
-      return { ok: true, admin_token: data.admin_token, ttl_s: data.ttl_s || data.ttl_sec || null };
+    if (res.ok && data?.ok && data.admin_token) {
+      setAdminSession({
+        token: data.admin_token,
+        ttlSec: data.ttl_s || data.ttl_sec || null,
+        role: data.role || "owner",
+        email: data.email || "owner",
+      });
+      return { ok: true };
     }
-    return { ok: false, err: data?.err || "Login failed" };
+    return { ok: false, err: data?.err || `HTTP ${res.status}` };
   } catch (e) {
-    return { ok: false, err: String(e.message || e) };
+    return { ok: false, err: String(e?.message || e) };
+  }
+}
+
+export async function adminLoginUser(email, password) {
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({ action: "admin_login_user", email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.ok && data.admin_token) {
+      setAdminSession({
+        token: data.admin_token,
+        ttlSec: data.ttl_s || data.ttl_sec || null,
+        role: data.role || "viewer",
+        email: data.email || email,
+      });
+      return { ok: true };
+    }
+    return { ok: false, err: data?.err || `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, err: String(e?.message || e) };
   }
 }
 
 export async function adminLogout() {
   const admin_token = getAdminToken();
-  clearAdminToken();
+  clearAdminSession();
   if (!admin_token) return { ok: true };
   try {
     await fetch(GS_ENDPOINT, {
@@ -1055,28 +1210,70 @@ export async function loadParticipantsRoster(arg1, arg2) {
 // --- Admin: wipe participants for a feed
 export async function wipeParticipantsOnBackend(feedId) {
   const admin_token = getAdminToken();
-  if (!admin_token) return { ok: false, err: "admin auth required" };
-  if (!feedId) return { ok: false, err: "feed_id required" };
+  if (!admin_token || !feedId) return false;
 
   try {
     const res = await fetch(GS_ENDPOINT, {
       method: "POST",
       mode: "cors",
       headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify({ action: "wipe_participants", feed_id: feedId, admin_token }),
+      keepalive: true,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return !!(res.ok && data.ok !== false);
+  } catch {
+    return false;
+  }
+}
+
+const WIPE_POLICY_GET_URL = GS_ENDPOINT + "?path=wipe_policy";
+
+export async function getWipePolicyFromBackend() {
+  const admin_token = getAdminToken();
+  if (!admin_token) return null;
+  try {
+    const url = `${WIPE_POLICY_GET_URL}&admin_token=${encodeURIComponent(admin_token)}&_ts=${Date.now()}`;
+    const data = await getJsonWithRetry(
+      url,
+      { method: "GET", mode: "cors", cache: "no-store" },
+      { retries: 1, timeoutMs: 8000 }
+    );
+    // expected shape: { ok: true, wipe_on_change: boolean }
+    if (data && data.ok !== false && typeof data.wipe_on_change !== "undefined") {
+      return !!data.wipe_on_change;
+    }
+    return null;
+  } catch (e) {
+    console.warn("getWipePolicyFromBackend failed:", e);
+    return null;
+  }
+}
+
+export async function setWipePolicyOnBackend(wipeOnChange) {
+  const admin_token = getAdminToken();
+  if (!admin_token) return { ok: false, err: "admin auth required" };
+
+  try {
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors", // or "no-cors" if you prefer, but "cors" + text/plain is fine
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({
-        action: "wipe_participants",
-        feed_id: feedId,
+        action: "set_wipe_policy",
         admin_token,
+        wipe_on_change: !!wipeOnChange,
       }),
       keepalive: true,
     });
 
-    let data = {};
-    try { data = await res.json(); } catch { data = {}; }
-
-    if (!res.ok) return { ok: false, err: `HTTP ${res.status}` };
-    if (!data.ok) return { ok: false, err: data.err || "unknown error" };
-    return { ok: true };
+    // If you keep mode:"no-cors", you can't read the body; with "cors" you can:
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      return { ok: false, err: data?.err || `HTTP ${res.status}` };
+    }
+    return { ok: true, wipe_on_change: !!data.wipe_on_change };
   } catch (e) {
     return { ok: false, err: String(e.message || e) };
   }

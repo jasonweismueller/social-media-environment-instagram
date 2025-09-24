@@ -881,3 +881,45 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   cursor:pointer;
   overflow:hidden;
 }
+
+/* ===== Admin Login: segmented toggle buttons - equal size ===== */
+.admin-login-wrap .admin-login-card .segmented {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.admin-login-wrap .admin-login-card .segmented .btn {
+  flex: 1 1 0;                  /* equal widths */
+  display: flex;                /* center text vertically */
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;          /* prevent wrapping → consistent height */
+  height: 40px;                 /* fixed equal height */
+  padding: 0 .75rem;            /* consistent horizontal padding */
+  line-height: 1;               /* remove extra vertical space variance */
+}
+
+/* ===== Admin Login: label → field spacing a bit larger ===== */
+.admin-login-wrap .card.admin-login-card label {
+  display: grid;
+  gap: .6rem;                   /* was .4rem — gives a touch more space */
+  margin-top: 1rem;
+}
+
+/* Segmented toggle: lock into one row, equal size, perfectly aligned */
+.admin-login-wrap .admin-login-card .segmented{
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;  /* two equal columns */
+  gap: 8px;
+  align-items: stretch;            /* same vertical alignment */
+}
+
+.admin-login-wrap .admin-login-card .segmented .btn{
+  width: 100%;
+  height: 42px;                    /* same height for both */
+  margin: 0;                       /* kill any stray margins */
+  padding: 0 .75rem;               /* horizontal only */
+  line-height: 1;                  /* consistent vertical centering */
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap;
+}

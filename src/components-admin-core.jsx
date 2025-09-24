@@ -14,6 +14,11 @@ import {
   loadPostsFromBackend,
   wipeParticipantsOnBackend,
   deleteFeedOnBackend,
+  getWipePolicyFromBackend,
+  setWipePolicyOnBackend,
+  hasAdminRole,       // viewer|editor|owner checks
+  getAdminEmail,
+  getAdminRole,
 } from "./utils";
 
 // ⬇️ updated imports after UI split
@@ -21,9 +26,9 @@ import { PostCard } from "./components-ui-posts";
 import { Modal } from "./components-ui-core";
 import { ParticipantsPanel } from "./components-admin-parts";
 import { randomAvatarByKind } from "./avatar-utils";
-
-// NEW: media fieldset split out
 import { MediaFieldset } from "./components-admin-media";
+// ✅ use your component name:
+import { AdminUsersPanel } from "./components-admin-users";
 
 /* -------- local helper: gender-neutral comic avatar (64px) ---------------- */
 function genNeutralAvatarDataUrl(size = 64) {
@@ -40,6 +45,10 @@ function genNeutralAvatarDataUrl(size = 64) {
   </g>
 </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function RoleGate({ min = "viewer", children, elseRender = null }) {
+  return hasAdminRole(min) ? children : (elseRender ?? null);
 }
 
 /* ------------------------ Tiny admin stats fetcher ------------------------- */
@@ -131,6 +140,10 @@ export function AdminDashboard({
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadingPoster, setUploadingPoster] = useState(false);
 
+  // --- NEW: wipe-on-change global policy
+  const [wipeOnChange, setWipeOnChange] = useState(null);     // null = unknown yet
+  const [updatingWipe, setUpdatingWipe] = useState(false);
+
   const [feeds, setFeeds] = useState([]);
   const [feedId, setFeedId] = useState("");
   const [feedName, setFeedName] = useState("");
@@ -157,6 +170,12 @@ export function AdminDashboard({
       const feedsList = Array.isArray(list) ? list : [];
       setFeeds(feedsList);
       setDefaultFeedId(backendDefault || null);
+
+      // NEW: load wipe policy on mount
+      try {
+        const policy = await getWipePolicyFromBackend();
+        if (alive && policy !== null) setWipeOnChange(!!policy);
+      } catch {}
 
       const chosen = feedsList.find(f => f.feed_id === backendDefault) || feedsList[0] || null;
       if (chosen) {
@@ -311,7 +330,7 @@ export function AdminDashboard({
     <div className="admin-shell" style={{ display: "grid", gap: "1rem" }}>
       <Section
         title="Admin Dashboard"
-        subtitle="Manage multiple feeds (conditions), set the default feed for participants, and review per-feed analytics."
+        subtitle={`Signed in as ${getAdminEmail() || "unknown"} · role: ${getAdminRole() || "viewer"}`}
         right={<button className="btn ghost" onClick={onLogout} title="Sign out of the admin session">Log out</button>}
       />
 
@@ -322,7 +341,9 @@ export function AdminDashboard({
           subtitle="Browse all feeds in the registry. Set default, load into editor, save posts to a feed, or delete a feed."
           right={
             <>
-              <button className="btn ghost" onClick={createNewFeed}>+ New feed</button>
+              <RoleGate min="editor">
+                <button className="btn ghost" onClick={createNewFeed}>+ New feed</button>
+              </RoleGate>
               <button
                 className="btn"
                 onClick={async () => {
@@ -330,12 +351,42 @@ export function AdminDashboard({
                   const [list, backendDefault] = await Promise.all([listFeedsFromBackend(), getDefaultFeedFromBackend()]);
                   setFeeds(Array.isArray(list) ? list : []);
                   setDefaultFeedId(backendDefault || null);
+                  // also refresh policy display
+                  try {
+                    const policy = await getWipePolicyFromBackend();
+                    if (policy !== null) setWipeOnChange(!!policy);
+                  } catch {}
                   setFeedsLoading(false);
                 }}
                 title="Reload feed registry from backend"
               >
                 Refresh Feeds
               </button>
+              {/* NEW: wipe-on-change toggle (editors+) */}
+              <RoleGate min="owner">
+                <button
+                  className={`btn ghost ${wipeOnChange ? "active" : ""}`}
+                  disabled={updatingWipe || wipeOnChange === null}
+                  title="When ON, publishing posts that change the checksum wipes that feed’s participants."
+                  onClick={async () => {
+                    if (wipeOnChange === null) return;
+                    try {
+                      setUpdatingWipe(true);
+                      const next = !wipeOnChange;
+                      const res = await setWipePolicyOnBackend(next);
+                      if (res?.ok) {
+                        setWipeOnChange(!!res.wipe_on_change);
+                      } else {
+                        alert(res?.err || "Failed to update policy");
+                      }
+                    } finally {
+                      setUpdatingWipe(false);
+                    }
+                  }}
+                >
+                  {wipeOnChange ? "Wipe on change: ON" : "Wipe on change: OFF"}
+                </button>
+              </RoleGate>
             </>
           }
         >
@@ -382,31 +433,45 @@ export function AdminDashboard({
                       <td style={{ padding: ".5rem .5rem" }}>
                         <div style={{ display:"flex", flexWrap:"wrap", gap:".4rem", alignItems:"center" }}>
                           <button className="btn" title="Load this feed into the editor" onClick={() => selectFeed(f.feed_id)} disabled={isLoaded}>Load</button>
-                          <button className="btn" title="Make this the backend default feed" onClick={async () => { const ok = await setDefaultFeedOnBackend(f.feed_id); if (ok) setDefaultFeedId(f.feed_id); }} disabled={isDefault}>Default</button>
-                          <button
-                            className="btn"
-                            title="Save CURRENT editor posts into this feed"
-                            onClick={async () => {
-                              const ok = await savePostsToBackend(posts, { feedId: f.feed_id, name: f.name || f.feed_id });
-                              if (ok) {
-                                const list = await listFeedsFromBackend();
-                                const nextFeeds = Array.isArray(list) ? list : [];
-                                setFeeds(nextFeeds);
-                                const row = nextFeeds.find(x => x.feed_id === f.feed_id);
-                                if (row) {
-                                  const fresh = await loadPostsFromBackend(f.feed_id, { force: true });
-                                  const arr = Array.isArray(fresh) ? fresh : [];
-                                  setPosts(arr);
-                                  setCachedPosts(f.feed_id, row.checksum, arr);
+
+                          <RoleGate min="editor">
+                            <button
+                              className="btn"
+                              title="Make this the backend default feed"
+                              onClick={async () => {
+                                const ok = await setDefaultFeedOnBackend(f.feed_id);
+                                if (ok) setDefaultFeedId(f.feed_id);
+                              }}
+                              disabled={isDefault}
+                            >
+                              Default
+                            </button>
+
+                            <button
+                              className="btn"
+                              title="Save CURRENT editor posts into this feed"
+                              onClick={async () => {
+                                const ok = await savePostsToBackend(posts, { feedId: f.feed_id, name: f.name || f.feed_id });
+                                if (ok) {
+                                  const list = await listFeedsFromBackend();
+                                  const nextFeeds = Array.isArray(list) ? list : [];
+                                  setFeeds(nextFeeds);
+                                  const row = nextFeeds.find(x => x.feed_id === f.feed_id);
+                                  if (row) {
+                                    const fresh = await loadPostsFromBackend(f.feed_id, { force: true });
+                                    const arr = Array.isArray(fresh) ? fresh : [];
+                                    setPosts(arr);
+                                    setCachedPosts(f.feed_id, row.checksum, arr);
+                                  }
+                                  alert("Feed saved.");
+                                } else {
+                                  alert("Failed to save feed. Please re-login and try again.");
                                 }
-                                alert("Feed saved.");
-                              } else {
-                                alert("Failed to save feed. Please re-login and try again.");
-                              }
-                            }}
-                          >
-                            Save
-                          </button>
+                              }}
+                            >
+                              Save
+                            </button>
+                          </RoleGate>
 
                           {!stats && (
                             <button className="btn ghost" title="Load participant stats for this feed" onClick={() => loadStatsFor(f.feed_id)}>
@@ -414,31 +479,33 @@ export function AdminDashboard({
                             </button>
                           )}
 
-                          <button
-                            className="btn ghost danger"
-                            title="Delete the entire feed (posts, participants, registry)"
-                            onClick={async () => {
-                              const okGo = confirm(`Delete feed "${f.name || f.feed_id}"?\n\nThis removes posts, participants, and cannot be undone.`);
-                              if (!okGo) return;
-                              const ok = await deleteFeedOnBackend(f.feed_id);
-                              if (ok) {
-                                if (f.feed_id === feedId) {
-                                  const next = feeds.filter(x => x.feed_id !== f.feed_id);
-                                  const nextSel = next[0] || null;
-                                  setFeeds(next);
-                                  if (nextSel) { await selectFeed(nextSel.feed_id); } else { setFeedId(""); setFeedName(""); setPosts([]); }
+                          <RoleGate min="owner">
+                            <button
+                              className="btn ghost danger"
+                              title="Delete the entire feed (posts, participants, registry)"
+                              onClick={async () => {
+                                const okGo = confirm(`Delete feed "${f.name || f.feed_id}"?\n\nThis removes posts, participants, and cannot be undone.`);
+                                if (!okGo) return;
+                                const ok = await deleteFeedOnBackend(f.feed_id);
+                                if (ok) {
+                                  if (f.feed_id === feedId) {
+                                    const next = feeds.filter(x => x.feed_id !== f.feed_id);
+                                    const nextSel = next[0] || null;
+                                    setFeeds(next);
+                                    if (nextSel) { await selectFeed(nextSel.feed_id); } else { setFeedId(""); setFeedName(""); setPosts([]); }
+                                  } else {
+                                    setFeeds(prev => prev.filter(x => x.feed_id !== f.feed_id));
+                                  }
+                                  if (defaultFeedId === f.feed_id) setDefaultFeedId(null);
+                                  alert("Feed deleted.");
                                 } else {
-                                  setFeeds(prev => prev.filter(x => x.feed_id !== f.feed_id));
+                                  alert("Failed to delete feed. Please re-login and try again.");
                                 }
-                                if (defaultFeedId === f.feed_id) setDefaultFeedId(null);
-                                alert("Feed deleted.");
-                              } else {
-                                alert("Failed to delete feed. Please re-login and try again.");
-                              }
-                            }}
-                          >
-                            Delete
-                          </button>
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </RoleGate>
                         </div>
                       </td>
                     </tr>
@@ -461,24 +528,33 @@ export function AdminDashboard({
           title="Participants"
           subtitle={<><span>Live snapshot & interaction aggregates for </span><code style={{ fontSize: ".9em" }}>{feedId}</code>{defaultFeedId === feedId && <span className="subtle"> · default</span>}</>}
           right={
-            <button
-              className="btn ghost danger"
-              title="Delete the participants sheet for this feed (cannot be undone)"
-              onClick={async () => {
-                if (!feedId) return;
-                const okGo = confirm(`Wipe ALL participants for feed "${feedName || feedId}"?\n\nThis deletes the sheet and cannot be undone.`);
-                if (!okGo) return;
-                const ok = await wipeParticipantsOnBackend(feedId);
-                if (ok) { setParticipantsRefreshKey(k => k + 1); alert("Participants wiped."); }
-                else { alert("Failed to wipe participants. Please re-login and try again."); onLogout?.(); }
-              }}
-            >
-              Wipe Participants
-            </button>
+            <RoleGate min="owner">
+              <button
+                className="btn ghost danger"
+                title="Delete the participants sheet for this feed (cannot be undone)"
+                onClick={async () => {
+                  if (!feedId) return;
+                  const okGo = confirm(`Wipe ALL participants for feed "${feedName || feedId}"?\n\nThis deletes the sheet and cannot be undone.`);
+                  if (!okGo) return;
+                  const ok = await wipeParticipantsOnBackend(feedId);
+                  if (ok) { setParticipantsRefreshKey(k => k + 1); alert("Participants wiped."); }
+                  else { alert("Failed to wipe participants. Please re-login and try again."); onLogout?.(); }
+                }}
+              >
+                Wipe Participants
+              </button>
+            </RoleGate>
           }
         >
           <ParticipantsPanel key={`pp::${feedId}::${participantsRefreshKey}`} feedId={feedId} />
         </Section>
+
+        {/* Users (owners only) */}
+        <RoleGate min="owner">
+          <Section title="Users" subtitle="Manage admin users & roles.">
+            <AdminUsersPanel />
+          </Section>
+        </RoleGate>
 
         {/* Posts */}
         <Section
@@ -496,14 +572,16 @@ export function AdminDashboard({
                 Refresh Posts
               </button>
 
-              <ChipToggle label="Randomize feed order" checked={!!randomize} onChange={setRandomize} />
-              <button className="btn" onClick={() => { const p = makeRandomPost(); setIsNew(true); setEditing(p); }} title="Generate a synthetic post">
-                + Random Post
-              </button>
-              <button className="btn ghost" onClick={openNew}>+ Add Post</button>
-              <button className="btn ghost danger" onClick={clearFeed} disabled={!posts.length} title="Delete all posts from this feed">
-                Clear Feed
-              </button>
+              <RoleGate min="editor">
+                <ChipToggle label="Randomize feed order" checked={!!randomize} onChange={setRandomize} />
+                <button className="btn" onClick={() => { const p = makeRandomPost(); setIsNew(true); setEditing(p); }} title="Generate a synthetic post">
+                  + Random Post
+                </button>
+                <button className="btn ghost" onClick={openNew}>+ Add Post</button>
+                <button className="btn ghost danger" onClick={clearFeed} disabled={!posts.length} title="Delete all posts from this feed">
+                  Clear Feed
+                </button>
+              </RoleGate>
             </>
           }
         >
@@ -528,20 +606,22 @@ export function AdminDashboard({
                     </div>
                   </div>
                   <div style={{ display:"flex", gap: ".5rem" }}>
-                    <button
-                      className="btn ghost"
-                      onClick={() => setEditing({
-                        ...p,
-                        showTime: p.showTime !== false,
-                        avatarUrl:
-                          p.avatarMode === "random" && p.avatarRandomKind === "company"
-                            ? randomAvatarByKind("company", p.id || p.author || "seed", p.author || "")
-                            : (p.avatarMode === "neutral" ? genNeutralAvatarDataUrl(64) : p.avatarUrl)
-                      })}
-                    >
-                      Edit
-                    </button>
-                    <button className="btn ghost danger" onClick={() => removePost(p.id)}>Delete</button>
+                    <RoleGate min="editor">
+                      <button
+                        className="btn ghost"
+                        onClick={() => setEditing({
+                          ...p,
+                          showTime: p.showTime !== false,
+                          avatarUrl:
+                            p.avatarMode === "random" && p.avatarRandomKind === "company"
+                              ? randomAvatarByKind("company", p.id || p.author || "seed", p.author || "")
+                              : (p.avatarMode === "neutral" ? genNeutralAvatarDataUrl(64) : p.avatarUrl)
+                        })}
+                      >
+                        Edit
+                      </button>
+                      <button className="btn ghost danger" onClick={() => removePost(p.id)}>Delete</button>
+                    </RoleGate>
                   </div>
                 </div>
 
@@ -562,7 +642,9 @@ export function AdminDashboard({
           footer={
             <>
               <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn primary" onClick={saveEditing}>{isNew ? "Add" : "Save"}</button>
+              <RoleGate min="editor" elseRender={<button className="btn" disabled title="Viewer mode">Save</button>}>
+                <button className="btn primary" onClick={saveEditing}>{isNew ? "Add" : "Save"}</button>
+              </RoleGate>
             </>
           }
         >
@@ -855,7 +937,6 @@ export function AdminDashboard({
 }
 
 // -------------------- Random Post Generator helpers --------------------
-// (kept at bottom to keep core file tidy)
 const RAND_NAMES = [
   "Jordan Li","Maya Patel","Samir Khan","Alex Chen","Luca Rossi",
   "Nora Williams","Priya Nair","Diego Santos","Hana Suzuki","Ava Johnson",
