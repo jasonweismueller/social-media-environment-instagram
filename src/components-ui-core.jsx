@@ -3,6 +3,26 @@ import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
 
+/* ------------------------------- Mobile helper ----------------------------- */
+function useIsMobile(breakpointPx = 700) {
+  const isBrowser = typeof window !== "undefined";
+  const [isMobile, setIsMobile] = useState(
+    isBrowser ? window.matchMedia(`(max-width:${breakpointPx}px)`).matches : false
+  );
+  useEffect(() => {
+    if (!isBrowser) return;
+    const mq = window.matchMedia(`(max-width:${breakpointPx}px)`);
+    const h = (e) => setIsMobile(e.matches);
+    mq.addEventListener?.("change", h);
+    mq.addListener && mq.addListener(h);
+    return () => {
+      mq.removeEventListener?.("change", h);
+      mq.removeListener && mq.removeListener(h);
+    };
+  }, [breakpointPx, isBrowser]);
+  return isMobile;
+}
+
 /* ------------------------------- Icons (IG) -------------------------------- */
 /* (Keeping exports in case other components import them, but we won't render
    them in the global chrome anymore.) */
@@ -86,7 +106,7 @@ export const IconSettings = (p) => (
     <path
       d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z
          M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3
-         1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
+         1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0  0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0  1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
       fill="currentColor"
     />
   </svg>
@@ -443,6 +463,7 @@ function SideRailsPlaceholder() {
 /* ------------------------- Route-aware top chrome toggle ------------------- */
 export function RouteAwareTopbar() {
   const location = useLocation();
+  const isMobile = useIsMobile(); // NEW
   let onAdmin = location.pathname === "/admin";
   if (!onAdmin && typeof window !== "undefined") {
     onAdmin = window.location.hash.startsWith("#/admin");
@@ -453,13 +474,27 @@ export function RouteAwareTopbar() {
     else document.body.classList.remove("admin-mode");
   }, [onAdmin]);
 
-  // Matches your CSS (body.admin-mode toggles which bar shows)
+  // Hide top rail on mobile and on /admin
+  if (isMobile || onAdmin) return null;
   return <TopRailPlaceholder />;
 }
 
 /* ------------------------- Page scaffold (rails + center) ------------------ */
 /* Wrap your feed with this so the left/right rails render beside it. */
 export function PageScaffold({ children }) {
+  const isMobile = useIsMobile(); // NEW
+
+  if (isMobile) {
+    // No rails; full-bleed centered feed
+    return (
+      <div className="page" style={{ gridTemplateColumns: "1fr", paddingInline: 0 }}>
+        <div className="container feed" style={{ width: "100%", maxWidth: "100%", margin: 0, padding: 0 }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <SideRailsPlaceholder />
