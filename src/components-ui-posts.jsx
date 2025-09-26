@@ -642,6 +642,7 @@ export function PostCard({
 }
 
 /* ---------------- Feed (IG) ---------------- */
+/* ---------------- Feed (IG) ---------------- */
 export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const STEP = 6;
   const FIRST = Math.min(8, posts.length || 0);
@@ -669,38 +670,39 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const renderPosts = useMemo(() => posts.slice(0, visibleCount), [posts, visibleCount]);
 
   return (
-  <div className="feed-wrap">
-    <main className="insta-feed">
-      {renderPosts.map((p) => (
-        <PostCard
-          key={p.id}
-          post={p}
-          onAction={log}
-          disabled={disabled}
-          registerViewRef={registerViewRef}
-        />
-      ))}
+    <div className="feed-wrap">
+      <main className="insta-feed">
+        {renderPosts.map((p) => (
+          <PostCard
+            key={p.id}
+            post={p}
+            onAction={log}
+            disabled={disabled}
+            registerViewRef={registerViewRef}
+          />
+        ))}
+        <div ref={sentinelRef} aria-hidden="true" />
 
-      <div ref={sentinelRef} aria-hidden="true" />
+        {visibleCount >= posts.length && (
+          <div className="feed-end">End of Feed</div>
+        )}
 
-      {visibleCount >= posts.length && (
-        <div className="feed-end">End of Feed</div>
-      )}
-
-      <div className="feed-submit">
-        <button
-          type="button"
-          className="btn primary"
-          onClick={onSubmit}
-          disabled={disabled === true}
-        >
-          Submit
-        </button>
-      </div>
-    </main>
-  </div>
-);
+        <div className="feed-submit">
+          <button
+            type="button"
+            className="btn primary"
+            onClick={onSubmit}
+            disabled={disabled === true}
+          >
+            Submit
+          </button>
+        </div>
+      </main>
+    </div>
+  );
 }
+
+
 
 /* (Optional) also export default if some file imports default) */
 export default {};
