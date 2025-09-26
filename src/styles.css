@@ -646,3 +646,26 @@ body.admin-mode .ig-topbar { display:none !important; }
     padding:12px 12px 24px;
   }
 }
+
+
+/* Mobile feed fix */
+@media (max-width: 700px) {
+  .page {
+    grid-template-columns: 1fr !important;
+    padding-inline: 0 !important;
+  }
+  .container.feed {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .ig-card {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  /* prevent zoomed-in scaling */
+  html, body {
+    font-size: 16px; /* reset base */
+  }
+}
