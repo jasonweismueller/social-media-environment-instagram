@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import {
   uid,
-  REACTION_META,
   pravatar,
   randomAvatarUrl,
   randomSVG,
@@ -27,8 +26,10 @@ import { Modal } from "./components-ui-core";
 import { ParticipantsPanel } from "./components-admin-parts";
 import { randomAvatarByKind } from "./avatar-utils";
 import { MediaFieldset } from "./components-admin-media";
-// ✅ use your component name:
 import { AdminUsersPanel } from "./components-admin-users";
+
+// 🔒 Hard-force Instagram namespace everywhere in this file
+const APP = "ig";
 
 /* -------- local helper: gender-neutral comic avatar (64px) ---------------- */
 function genNeutralAvatarDataUrl(size = 64) {
@@ -57,7 +58,8 @@ async function fetchParticipantsStats(feedId) {
     const base = window.CONFIG?.API_BASE;
     const admin = window.ADMIN_TOKEN;
     if (!base || !admin) return null;
-    const url = `${base}?path=participants_stats&feed_id=${encodeURIComponent(feedId)}&admin_token=${encodeURIComponent(admin)}`;
+    const url =
+      `${base}?path=participants_stats&feed_id=${encodeURIComponent(feedId)}&admin_token=${encodeURIComponent(admin)}&app=${encodeURIComponent("ig")}&_=${Date.now()}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
@@ -76,12 +78,18 @@ function msToMinSec(n) {
 }
 
 /* ---------------------------- Posts local cache --------------------------- */
+// Namespaced by app to avoid IG/FB collisions
+function cacheKey(feedId) {
+  return `posts::${APP}::${feedId}`;
+}
+function cacheMetaKey(feedId) {
+  return `${cacheKey(feedId)}::meta`;
+}
 function getCachedPosts(feedId, checksum) {
   try {
-    const k = `posts::${feedId}`;
-    const meta = JSON.parse(localStorage.getItem(`${k}::meta`) || "null");
+    const meta = JSON.parse(localStorage.getItem(cacheMetaKey(feedId)) || "null");
     if (!meta || meta.checksum !== checksum) return null;
-    const data = JSON.parse(localStorage.getItem(k) || "null");
+    const data = JSON.parse(localStorage.getItem(cacheKey(feedId)) || "null");
     return Array.isArray(data) ? data : null;
   } catch {
     return null;
@@ -89,9 +97,8 @@ function getCachedPosts(feedId, checksum) {
 }
 function setCachedPosts(feedId, checksum, posts) {
   try {
-    const k = `posts::${feedId}`;
-    localStorage.setItem(k, JSON.stringify(posts || []));
-    localStorage.setItem(`${k}::meta`, JSON.stringify({ checksum, t: Date.now() }));
+    localStorage.setItem(cacheKey(feedId), JSON.stringify(posts || []));
+    localStorage.setItem(cacheMetaKey(feedId), JSON.stringify({ checksum, t: Date.now() }));
   } catch {}
 }
 
@@ -157,13 +164,21 @@ export function AdminDashboard({
     setFeedStats((m) => ({ ...m, [id]: s || { total: 0, submitted: 0, avg_ms_enter_to_submit: null } }));
   };
 
+  /* NEW: Force admin-mode body class so feed-only floating UI is suppressed */
+  useEffect(() => {
+    const b = document.body;
+    b.classList.add("admin-mode");
+    return () => b.classList.remove("admin-mode");
+  }, []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
       setFeedsLoading(true);
+      // ✅ Force IG namespace in all utils
       const [list, backendDefault] = await Promise.all([
-        listFeedsFromBackend(),
-        getDefaultFeedFromBackend(),
+        listFeedsFromBackend({ app: APP }),
+        getDefaultFeedFromBackend({ app: APP }),
       ]);
       if (!alive) return;
 
@@ -171,9 +186,9 @@ export function AdminDashboard({
       setFeeds(feedsList);
       setDefaultFeedId(backendDefault || null);
 
-      // NEW: load wipe policy on mount
+      // Load wipe policy (IG)
       try {
-        const policy = await getWipePolicyFromBackend();
+        const policy = await getWipePolicyFromBackend({ app: APP });
         if (alive && policy !== null) setWipeOnChange(!!policy);
       } catch {}
 
@@ -186,7 +201,7 @@ export function AdminDashboard({
         if (cached) {
           setPosts(cached);
         } else {
-          const fresh = await loadPostsFromBackend(chosen.feed_id, { force: true });
+          const fresh = await loadPostsFromBackend(chosen.feed_id, { force: true, app: APP });
           const arr = Array.isArray(fresh) ? fresh : [];
           setPosts(arr);
           setCachedPosts(chosen.feed_id, chosen.checksum, arr);
@@ -212,10 +227,28 @@ export function AdminDashboard({
       setPosts(cached);
       return;
     }
-    const fresh = await loadPostsFromBackend(id, { force: true });
+    const fresh = await loadPostsFromBackend(id, { force: true, app: APP });
     const arr = Array.isArray(fresh) ? fresh : [];
     setPosts(arr);
     if (row) setCachedPosts(id, row.checksum, arr);
+  };
+
+  const saveToLoadedFeed = async () => {
+    if (!feedId) { alert("No feed is loaded."); return; }
+    const ok = await savePostsToBackend(posts, { feedId, name: feedName || feedId, app: APP });
+    if (!ok) { alert("Failed to save feed. Please re-login and try again."); return; }
+
+    const list = await listFeedsFromBackend({ app: APP });
+    const nextFeeds = Array.isArray(list) ? list : [];
+    setFeeds(nextFeeds);
+
+    const freshRow = nextFeeds.find(x => x.feed_id === feedId);
+    const fresh = await loadPostsFromBackend(feedId, { force: true, app: APP });
+    const arr = Array.isArray(fresh) ? fresh : [];
+    setPosts(arr);
+    if (freshRow) setCachedPosts(feedId, freshRow.checksum, arr);
+
+    alert("Feed saved.");
   };
 
   const createNewFeed = () => {
@@ -238,7 +271,7 @@ export function AdminDashboard({
       id: uid(),
       author: "",
       time: "Just now",
-      showTime: true,            // NEW
+      showTime: true,
       text: "",
       links: [],
       badge: false,
@@ -247,7 +280,6 @@ export function AdminDashboard({
       avatarRandomKind,
       avatarUrl: randomAvatarByKind(avatarRandomKind, "new", "", randomAvatarUrl),
 
-      // media defaults
       imageMode: "none",
       image: null,
 
@@ -262,8 +294,8 @@ export function AdminDashboard({
       noteText: "",
       showReactions: false,
       selectedReactions: ["like"],
-      reactions: { like: 0, love: 0, care: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
-      metrics: { comments: 0, shares: 0 },
+      reactions: { like: 0 },
+      metrics: { comments: 0, saves: 0 },
 
       adType: "none",
       adDomain: "",
@@ -287,14 +319,12 @@ export function AdminDashboard({
       const idx = arr.findIndex((p) => p.id === editing.id);
       const clean = { ...editing };
 
-      // keep avatar in sync for company logos
       if (clean.avatarMode === "random" && !clean.avatarUrl) {
         clean.avatarUrl = randomAvatarByKind(clean.avatarRandomKind || "any", clean.id || clean.author || "seed", clean.author || "", randomAvatarUrl);
       }
       if (clean.avatarMode === "random" && clean.avatarRandomKind === "company") {
         clean.avatarUrl = randomAvatarByKind("company", clean.id || clean.author || "seed", clean.author || "");
       }
-      // NEW: neutral mode always generates data URL
       if (clean.avatarMode === "neutral") {
         clean.avatarUrl = genNeutralAvatarDataUrl(64);
       }
@@ -312,7 +342,14 @@ export function AdminDashboard({
       if (clean.imageMode === "none") clean.image = null;
       if (clean.imageMode === "random" && !clean.image) clean.image = randomSVG("Image");
 
-      // default showTime true if field missing
+      // IG-only metrics + reactions
+      clean.selectedReactions = ["like"];
+      clean.reactions = { like: Number(clean.reactions?.like || 0) };
+      clean.metrics = {
+        comments: Number(clean.metrics?.comments || 0),
+        saves: Number(clean.metrics?.saves || 0),
+      };
+
       if (typeof clean.showTime === "undefined") clean.showTime = true;
 
       return idx === -1 ? [...arr, clean] : arr.map((p, i) => (i === idx ? clean : p));
@@ -338,7 +375,7 @@ export function AdminDashboard({
         {/* Feeds */}
         <Section
           title={`Feeds (${feeds.length || 0})`}
-          subtitle="Browse all feeds in the registry. Set default, load into editor, save posts to a feed, or delete a feed."
+          subtitle="Manage all Instagram feeds. Set default, load into editor, save posts to a feed, or delete a feed."
           right={
             <>
               <RoleGate min="editor">
@@ -348,12 +385,14 @@ export function AdminDashboard({
                 className="btn"
                 onClick={async () => {
                   setFeedsLoading(true);
-                  const [list, backendDefault] = await Promise.all([listFeedsFromBackend(), getDefaultFeedFromBackend()]);
+                  const [list, backendDefault] = await Promise.all([
+                    listFeedsFromBackend({ app: APP }),
+                    getDefaultFeedFromBackend({ app: APP }),
+                  ]);
                   setFeeds(Array.isArray(list) ? list : []);
                   setDefaultFeedId(backendDefault || null);
-                  // also refresh policy display
                   try {
-                    const policy = await getWipePolicyFromBackend();
+                    const policy = await getWipePolicyFromBackend({ app: APP });
                     if (policy !== null) setWipeOnChange(!!policy);
                   } catch {}
                   setFeedsLoading(false);
@@ -362,7 +401,6 @@ export function AdminDashboard({
               >
                 Refresh Feeds
               </button>
-              {/* NEW: wipe-on-change toggle (editors+) */}
               <RoleGate min="owner">
                 <button
                   className={`btn ghost ${wipeOnChange ? "active" : ""}`}
@@ -373,7 +411,7 @@ export function AdminDashboard({
                     try {
                       setUpdatingWipe(true);
                       const next = !wipeOnChange;
-                      const res = await setWipePolicyOnBackend(next);
+                      const res = await setWipePolicyOnBackend(next, { app: APP });
                       if (res?.ok) {
                         setWipeOnChange(!!res.wipe_on_change);
                       } else {
@@ -439,7 +477,7 @@ export function AdminDashboard({
                               className="btn"
                               title="Make this the backend default feed"
                               onClick={async () => {
-                                const ok = await setDefaultFeedOnBackend(f.feed_id);
+                                const ok = await setDefaultFeedOnBackend(f.feed_id, { app: APP });
                                 if (ok) setDefaultFeedId(f.feed_id);
                               }}
                               disabled={isDefault}
@@ -447,30 +485,15 @@ export function AdminDashboard({
                               Default
                             </button>
 
-                            <button
-                              className="btn"
-                              title="Save CURRENT editor posts into this feed"
-                              onClick={async () => {
-                                const ok = await savePostsToBackend(posts, { feedId: f.feed_id, name: f.name || f.feed_id });
-                                if (ok) {
-                                  const list = await listFeedsFromBackend();
-                                  const nextFeeds = Array.isArray(list) ? list : [];
-                                  setFeeds(nextFeeds);
-                                  const row = nextFeeds.find(x => x.feed_id === f.feed_id);
-                                  if (row) {
-                                    const fresh = await loadPostsFromBackend(f.feed_id, { force: true });
-                                    const arr = Array.isArray(fresh) ? fresh : [];
-                                    setPosts(arr);
-                                    setCachedPosts(f.feed_id, row.checksum, arr);
-                                  }
-                                  alert("Feed saved.");
-                                } else {
-                                  alert("Failed to save feed. Please re-login and try again.");
-                                }
-                              }}
-                            >
-                              Save
-                            </button>
+                            {isLoaded ? (
+                              <button className="btn" title="Save CURRENT editor posts to the LOADED feed" onClick={saveToLoadedFeed}>
+                                Save
+                              </button>
+                            ) : (
+                              <button className="btn" title="Load this feed first to enable Save" disabled>
+                                Save
+                              </button>
+                            )}
                           </RoleGate>
 
                           {!stats && (
@@ -480,32 +503,41 @@ export function AdminDashboard({
                           )}
 
                           <RoleGate min="owner">
-                            <button
-                              className="btn ghost danger"
-                              title="Delete the entire feed (posts, participants, registry)"
-                              onClick={async () => {
-                                const okGo = confirm(`Delete feed "${f.name || f.feed_id}"?\n\nThis removes posts, participants, and cannot be undone.`);
-                                if (!okGo) return;
-                                const ok = await deleteFeedOnBackend(f.feed_id);
-                                if (ok) {
-                                  if (f.feed_id === feedId) {
-                                    const next = feeds.filter(x => x.feed_id !== f.feed_id);
-                                    const nextSel = next[0] || null;
-                                    setFeeds(next);
-                                    if (nextSel) { await selectFeed(nextSel.feed_id); } else { setFeedId(""); setFeedName(""); setPosts([]); }
-                                  } else {
-                                    setFeeds(prev => prev.filter(x => x.feed_id !== f.feed_id));
-                                  }
-                                  if (defaultFeedId === f.feed_id) setDefaultFeedId(null);
-                                  alert("Feed deleted.");
-                                } else {
-                                  alert("Failed to delete feed. Please re-login and try again.");
-                                }
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </RoleGate>
+  <button
+    className="btn ghost danger"
+    title="Delete the entire feed (posts, participants, registry)"
+    onClick={async () => {
+      const okGo = confirm(
+        `Delete feed "${f.name || f.feed_id}"?\n\nThis removes posts, participants, and cannot be undone.`
+      );
+      if (!okGo) return;
+
+      const res = await deleteFeedOnBackend(f.feed_id); // no second arg now
+      if (res.ok) {
+        if (f.feed_id === feedId) {
+          const next = feeds.filter((x) => x.feed_id !== f.feed_id);
+          const nextSel = next[0] || null;
+          setFeeds(next);
+          if (nextSel) {
+            await selectFeed(nextSel.feed_id);
+          } else {
+            setFeedId("");
+            setFeedName("");
+            setPosts([]);
+          }
+        } else {
+          setFeeds((prev) => prev.filter((x) => x.feed_id !== f.feed_id));
+        }
+        if (defaultFeedId === f.feed_id) setDefaultFeedId(null);
+        alert("Feed deleted.");
+      } else {
+        alert(res.err || "Failed to delete feed.");
+      }
+    }}
+  >
+    Delete
+  </button>
+</RoleGate>
                         </div>
                       </td>
                     </tr>
@@ -528,24 +560,33 @@ export function AdminDashboard({
           title="Participants"
           subtitle={<><span>Live snapshot & interaction aggregates for </span><code style={{ fontSize: ".9em" }}>{feedId}</code>{defaultFeedId === feedId && <span className="subtle"> · default</span>}</>}
           right={
-            <RoleGate min="owner">
-              <button
-                className="btn ghost danger"
-                title="Delete the participants sheet for this feed (cannot be undone)"
-                onClick={async () => {
-                  if (!feedId) return;
-                  const okGo = confirm(`Wipe ALL participants for feed "${feedName || feedId}"?\n\nThis deletes the sheet and cannot be undone.`);
-                  if (!okGo) return;
-                  const ok = await wipeParticipantsOnBackend(feedId);
-                  if (ok) { setParticipantsRefreshKey(k => k + 1); alert("Participants wiped."); }
-                  else { alert("Failed to wipe participants. Please re-login and try again."); onLogout?.(); }
-                }}
-              >
-                Wipe Participants
-              </button>
-            </RoleGate>
+           <RoleGate min="owner">
+  <button
+    className="btn ghost danger"
+    title="Delete the participants sheet for this feed (cannot be undone)"
+    onClick={async () => {
+      if (!feedId) return;
+      const okGo = confirm(
+        `Wipe ALL participants for feed "${feedName || feedId}"?\n\nThis deletes the sheet and cannot be undone.`
+      );
+      if (!okGo) return;
+
+      const ok = await wipeParticipantsOnBackend(feedId);
+      if (ok) {
+        setParticipantsRefreshKey((k) => k + 1);
+        alert("Participants wiped.");
+      } else {
+        alert("Failed to wipe participants. Please re-login and try again.");
+        onLogout?.();
+      }
+    }}
+  >
+    Wipe Participants
+  </button>
+</RoleGate>
           }
         >
+          {/* ParticipantsPanel should internally pass app=ig as well, or read it from CONFIG. */}
           <ParticipantsPanel key={`pp::${feedId}::${participantsRefreshKey}`} feedId={feedId} />
         </Section>
 
@@ -558,17 +599,21 @@ export function AdminDashboard({
 
         {/* Posts */}
         <Section
-          title={`Posts (${posts.length})`}
-          subtitle="Curate and publish the canonical feed shown to participants."
+          title={`Instagram Posts (${posts.length})`}
+          subtitle="Curate and publish the canonical Instagram feed shown to participants."
           right={
             <>
-              <button className="btn" onClick={async () => {
-                const fresh = await loadPostsFromBackend(feedId, { force: true });
-                const arr = Array.isArray(fresh) ? fresh : [];
-                setPosts(arr);
-                const row = feeds.find(f => f.feed_id === feedId);
-                if (row) setCachedPosts(feedId, row.checksum, arr);
-              }} title="Reload posts for this feed from backend">
+              <button
+                className="btn"
+                onClick={async () => {
+                  const fresh = await loadPostsFromBackend(feedId, { force: true, app: APP });
+                  const arr = Array.isArray(fresh) ? fresh : [];
+                  setPosts(arr);
+                  const row = feeds.find(f => f.feed_id === feedId);
+                  if (row) setCachedPosts(feedId, row.checksum, arr);
+                }}
+                title="Reload posts for this feed from backend"
+              >
                 Refresh Posts
               </button>
 
@@ -818,55 +863,44 @@ export function AdminDashboard({
 
               <h4 className="section-title">Reactions & Metrics</h4>
               <fieldset className="fieldset">
-                <label>Show reactions
-                  <select className="select" value={String(!!editing.showReactions)} onChange={(e) => setEditing({ ...editing, showReactions: e.target.value === "true" })}>
+                <label>
+                  Show like count
+                  <select
+                    className="select"
+                    value={String(!!editing.showReactions)}
+                    onChange={(e) =>
+                      setEditing({ ...editing, showReactions: e.target.value === "true" })
+                    }
+                  >
                     <option value="false">Hide</option>
                     <option value="true">Show</option>
                   </select>
                 </label>
 
-                <div className="subtle">Display these reactions</div>
-                <div className="rx-pills">
-                  {Object.keys(REACTION_META).map((key) => {
-                    const checked = (editing.selectedReactions || []).includes(key);
-                    return (
-                      <label key={key} className={`pill ${checked ? "active" : ""}`}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const prev = new Set(editing.selectedReactions || []);
-                            e.target.checked ? prev.add(key) : prev.delete(key);
-                            setEditing({ ...editing, selectedReactions: Array.from(prev) });
-                          }}
-                        />
-                          <span className="emoji">{REACTION_META[key].emoji}</span>
-                          <span>{REACTION_META[key].label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <div className="grid-3">
-                  {Object.keys(REACTION_META).map((key) => (
-                    <label key={key}>
-                      {REACTION_META[key].label}
-                      <input
-                        className="input"
-                        type="number" min="0" inputMode="numeric" placeholder="0"
-                        value={Number(editing.reactions?.[key] || 0) === 0 ? "" : editing.reactions?.[key]}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => {
-                          const v = e.target.value === "" ? 0 : Number(e.target.value);
-                          setEditing((ed) => ({ ...ed, reactions: { ...(ed.reactions || {}), [key]: v } }));
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
+                <label>
+                  Likes
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={(editing.reactions?.like ?? 0) === 0 ? "" : editing.reactions.like}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const v = e.target.value === "" ? 0 : Number(e.target.value);
+                      setEditing((ed) => ({
+                        ...ed,
+                        reactions: { like: v },
+                        selectedReactions: ["like"],
+                      }));
+                    }}
+                  />
+                </label>
 
                 <div className="grid-2">
-                  <label>Comments
+                  <label>
+                    Comments
                     <input
                       className="input"
                       type="number"
@@ -877,22 +911,29 @@ export function AdminDashboard({
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const v = e.target.value === "" ? 0 : Number(e.target.value);
-                        setEditing((ed) => ({ ...ed, metrics: { ...(ed.metrics || {}), comments: v } }));
+                        setEditing((ed) => ({
+                          ...ed,
+                          metrics: { ...(ed.metrics || {}), comments: v },
+                        }));
                       }}
                     />
                   </label>
-                  <label>Shares
+                  <label>
+                    Saves
                     <input
                       className="input"
                       type="number"
                       min="0"
                       inputMode="numeric"
                       placeholder="0"
-                      value={(editing.metrics?.shares ?? 0) === 0 ? "" : editing.metrics.shares}
+                      value={(editing.metrics?.saves ?? 0) === 0 ? "" : editing.metrics.saves}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const v = e.target.value === "" ? 0 : Number(e.target.value);
-                        setEditing((ed) => ({ ...ed, metrics: { ...(ed.metrics || {}), shares: v } }));
+                        setEditing((ed) => ({
+                          ...ed,
+                          metrics: { ...(ed.metrics || {}), saves: v },
+                        }));
                       }}
                     />
                   </label>
@@ -902,19 +943,30 @@ export function AdminDashboard({
 
             <aside className="editor-preview">
               <div className="preview-head">Live preview</div>
-              <div className="preview-zoom" style={{ pointerEvents: "auto" }}>
+
+              {/* SANDBOX: hide any floating IG UI in the modal preview */}
+              <style>{`
+                .admin-preview-sandbox .fb-controls,
+                .admin-preview-sandbox .react-flyout,
+                .admin-preview-sandbox .admin-fab-wrap,
+                .admin-preview-sandbox .video-center-btn,
+                .admin-preview-sandbox .video-mute-btn {
+                  display: none !important;
+                }
+                .admin-preview-sandbox .like-wrap { position: static !important; }
+              `}</style>
+
+              <div className="preview-zoom admin-preview-sandbox" style={{ pointerEvents: "auto" }}>
                 <PostCard
                   key={editing.id || "preview"}
                   post={{
                     ...editing,
-                    // pass neutral data URL when mode is neutral
                     avatarUrl:
                       editing.avatarMode === "neutral"
                         ? genNeutralAvatarDataUrl(64)
                         : (editing.avatarMode === "random" && !editing.avatarUrl
                             ? randomAvatarByKind(editing.avatarRandomKind || "any", editing.id || editing.author || "seed", editing.author || "", randomAvatarUrl)
                             : editing.avatarUrl),
-                    // hide time in preview if toggled off (by blanking it)
                     time: editing.showTime === false ? "" : editing.time,
                     image:
                       editing.imageMode === "random"
@@ -970,25 +1022,13 @@ function makeRandomPost() {
   const interventionType = chance(0.20) ? randPick(["label", "note"]) : "none";
   const noteText = interventionType === "note" ? randPick(NOTE_SNIPPETS) : "";
   const showReactions = chance(0.85);
-  const rxKeys = Object.keys(REACTION_META);
-  const selectedReactions = showReactions
-    ? rxKeys.sort(() => 0.5 - Math.random()).slice(0, randInt(1, 3))
-    : ["like"];
 
   const baseCount = randInt(5, 120);
   const rx = (p) => randInt(0, Math.floor(baseCount*p));
-  const reactions = {
-    like:  chance(0.9) ? rx(0.6) : 0,
-    love:  chance(0.5) ? rx(0.5) : 0,
-    care:  chance(0.25)? rx(0.3) : 0,
-    haha:  chance(0.35)? rx(0.4) : 0,
-    wow:   chance(0.3) ? rx(0.35): 0,
-    sad:   chance(0.2) ? rx(0.25): 0,
-    angry: chance(0.2) ? rx(0.25): 0,
-  };
+
   const metrics = {
     comments: chance(0.6) ? rx(0.5) : 0,
-    shares:   chance(0.4) ? rx(0.35): 0,
+    saves:   chance(0.4) ? rx(0.35): 0,
   };
 
   const avatarRandomKind = "any";
@@ -1009,7 +1049,10 @@ function makeRandomPost() {
     videoShowControls: true,
     videoLoop: false,
     interventionType, noteText,
-    showReactions, selectedReactions, reactions, metrics,
+    showReactions,
+    selectedReactions: ["like"],
+    reactions: { like: rx(0.9) },
+    metrics,
     adType: "none",
     adDomain: "",
     adHeadline: "",

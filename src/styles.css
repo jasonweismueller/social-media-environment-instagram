@@ -74,7 +74,7 @@ a:hover{text-decoration:underline}
 
 /* Footer actions */
 .footer{padding:.5rem;border-top:1px solid var(--line)}
-.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+actions{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
 .action{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.5rem;border:1px solid transparent;border-radius:.75rem;cursor:pointer;color:#374151;background:#fff;min-height:38px}
 .action:hover{background:#f3f4f6}
 .action.active{background:#e7f0ff;color:var(--blue)}
@@ -184,13 +184,7 @@ a:hover{text-decoration:underline}
 .muted{color:var(--muted)}
 
 .rx-stack{display:inline-flex;align-items:center}
-.rx-stack .rx {
-  width:20px; height:20px; border-radius:999px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:14px; line-height:1;
-  border:1px solid #fff; background:#fff;
-  margin-right:-4px;
-}
+.rx-stack .rx + .rx { display: none; }
 .rx-stack .rx:last-of-type{margin-right:0}
 .rx-count{margin-left:9px;line-height:18px;display:inline-block}
 
@@ -923,3 +917,146 @@ body:has(.admin-login-wrap) .nav { display: block !important; }
   display: flex; align-items: center; justify-content: center;
   white-space: nowrap;
 }
+
+/* IG: no multi-reaction flyout */
+.react-flyout{ display:none !important; }
+
+/* Example if your markup uses data-action="like" */
+.action[data-action="like"].active { color:#ed4956; background:#ffe8ec; }
+
+/* Or if you have .btn-like */
+.action.btn-like.active { color:#ed4956; background:#ffe8ec; }
+
+
+/* ---------------- Instagram skeleton (for <SkeletonFeed/>) ---------------- */
+.ig-page { max-width: var(--feed-max); margin: 0 auto; padding: 12px; }
+.ig-stories { display: flex; gap: 12px; padding: 8px 4px; }
+.ig-story { width: 72px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ghost-story-ring { width: 56px; height: 56px; border-radius: 50%; padding: 3px;
+  background: linear-gradient(135deg,#f3f4f6,#e5e7eb); }
+.ghost-story-avatar { width: 100%; height: 100%; border-radius: 50%; background: #e5e7eb; }
+.ig-feed { display: grid; gap: 16px; }
+.ig-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px; }
+.ig-card-head { display: flex; align-items: center; gap: 10px; }
+.ghost-media { width: 100%; padding-top: 100%; background: #e5e7eb; border-radius: 8px; }
+.ig-actions { display: flex; align-items: center; gap: 12px; padding-top: 8px; }
+.ghost-icon { width: 24px; height: 24px; background: #e5e7eb; border-radius: 6px; }
+.ghost-line { height: 8px; border-radius: 4px; margin: .22rem 0;
+  background-image: linear-gradient(90deg,#eef2f7 0%,#f7f9fc 50%,#eef2f7 100%);
+  background-size: 220px 100%; animation: ghostShimmer 2.8s ease-in-out infinite; }
+.ghost-line.w-40 { width: 40%; } .ghost-line.w-25 { width: 25%; }
+.ghost-line.w-70 { width: 70%; } .ghost-line.w-55 { width: 55%; }
+@keyframes ghostShimmer { 0% { background-position: -220px 0; } 100% { background-position: 220px 0; } }
+
+/* ---------------- IG reactions: no multi-reaction flyout ------------------ */
+.react-flyout { display: none !important; }
+/* If you highlight a 'like' state, keep it IG-colored */
+.action[data-action="like"].active,
+.action.btn-like.active { color: #ed4956; background: #ffe8ec; }
+
+
+/* ========================
+   FEED LAYOUT + RAILS
+   ======================== */
+
+/* 3-column page scaffold (rails + center feed) */
+.page{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) minmax(var(--feed-min), var(--feed-max)) minmax(0,1fr);
+  gap: var(--gap);
+  width: 100%;
+  margin: 0;
+  padding-inline: 24px;
+  justify-content: center;
+  overflow: visible;
+}
+.page .feed{ max-width: var(--feed-max); width:100%; margin:0 auto; padding:0; }
+.page .feed > .card:first-child{ margin-top: var(--feed-gap); }
+
+/* sticky rails with ghost placeholders */
+.rail{
+  position: sticky;
+  align-self: start;
+  top: var(--rail-gap);
+  height: calc(100vh - var(--rail-gap));
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  filter: grayscale(1) blur(1px);
+  opacity: .55;
+}
+.rail > *:first-child{ margin-top:0 !important; }
+
+/* ghost stacks that look like FB sidebars */
+.rail-stack{ display:grid; gap:12px; }
+.rail-card{ background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:.6rem; }
+.rail-row{ display:flex; align-items:center; gap:.6rem; padding:.3rem 0; }
+.rail-ic{ width:28px; height:28px; border-radius:8px; background:#e5e7eb; flex:0 0 auto; }
+.rail-t1{ width:120px; height:10px; border-radius:4px; background:#eef2f7; }
+.rail-t2{ width:80px; height:10px; border-radius:4px; background:#f3f4f6; margin-top:4px; }
+
+/* shimmer */
+@keyframes railShimmer{ 0%{background-position:-220px 0} 100%{background-position:220px 0} }
+.rail-t1, .rail-t2{
+  background-image:linear-gradient(90deg,#eef2f7 0%,#f7f9fc 50%,#eef2f7 100%);
+  background-size:220px 100%;
+  animation: railShimmer 2.8s ease-in-out infinite;
+}
+
+/* Don’t show rails on admin */
+body.admin-mode .rail-left,
+body.admin-mode .rail-right { display:none !important; }
+
+/* collapse rails on narrow viewports */
+@media (max-width: 1200px){
+  .page{ grid-template-columns: 0 minmax(var(--feed-min), 1fr) minmax(0,1fr); }
+  .rail-left{ display:none; }
+}
+@media (max-width: 1024px){
+  .page{ grid-template-columns: minmax(0,1fr); padding-inline: 12px; }
+  .rail-right{ display:none; }
+  .page .feed{ padding: 12px; }
+}
+
+/* ========================
+   FEED TOP PLACEHOLDER BAR
+   ======================== */
+
+/* Top bar container (aligned with page grid) */
+.ig-topbar{
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+}
+.ig-top-inner{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) minmax(var(--feed-min), var(--feed-max)) minmax(0,1fr);
+  align-items:center;
+  height:52px;
+  padding: 0 24px;
+}
+.ig-left{ grid-column:1; display:flex; align-items:center; gap:10px; }
+.ig-right{ grid-column:3; display:flex; align-items:center; gap:10px; justify-content:flex-end; }
+
+/* neutral “wordmark” block so it feels like a header, not icons */
+.ig-wordmark{ width:120px; height:16px; border-radius:6px; background:#f3f4f6; }
+/* hide the literal IG action icons if your component renders them */
+.ig-topbar .ig-right svg { display:none !important; }
+
+/* Show this bar only on feed, hide on admin */
+body.admin-mode .ig-topbar { display:none !important; }
+
+/* keep feed spacing sane beneath bar */
+.page { padding-top: var(--feed-gap); }
+.page .feed > .card:first-child { margin-top: 0 !important; }
+
+/* ========================
+   OPTIONAL: LIGHT POLISH
+   ======================== */
+
+/* Make rails always visible (not tied to loading state) */
+.feed-shell{ position: relative; }
+
+/* Ensure overlays don’t hide the rails (your .app-shell blur already handles content) */
