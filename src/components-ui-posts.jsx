@@ -88,9 +88,8 @@ function DotsIcon(props) {
 const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim() + "…" : t);
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
-/* ---------------- Mobile “Stories” ghost bar ---------------- */
+/* ---------------- Mobile “Stories” ghost bar (non-sticky) ---------------- */
 function StoryBar() {
-  // 10 ghost items, horizontally scrollable (scrollbar hidden via CSS)
   const items = Array.from({ length: 10 });
   return (
     <div className="ig-stories-bar" aria-hidden="true">
@@ -161,7 +160,7 @@ function sheetBtn({ danger = false, disabled = false } = {}) {
   };
 }
 
-/* ---------------- Desktop menu (portal to <body>) ---------------- */
+/* ---------------- Desktop menu ---------------- */
 function DesktopMenu({ anchorEl, open, onClose, onPick, id }) {
   const [pos, setPos] = useState({ top: 0, left: 0, w: 180 });
 
@@ -265,53 +264,33 @@ function DesktopMenu({ anchorEl, open, onClose, onPick, id }) {
 }
 
 /* ---------------- PostCard (IG) ---------------- */
-export function PostCard({
-  post,
-  onAction = () => {},
-  disabled = false,
-  registerViewRef,
-}) {
+export function PostCard({ post, onAction = () => {}, disabled = false, registerViewRef }) {
   const {
-    id,
-    author = "",
-    avatarUrl = "",
-    text = "",
-    image,
-    imageMode,
-    video,
-    videoMode,
-    videoPosterUrl,
-    reactions,
-    metrics,
-    time,
+    id, author = "", avatarUrl = "", text = "", image, imageMode, video, videoMode,
+    videoPosterUrl, reactions, metrics, time,
   } = post || {};
 
   const isMobile = useIsMobile(700);
 
-  // counts
   const baseLikes = useMemo(() => sumReactions(reactions), [reactions]);
   const baseComments = Number(metrics?.comments || 0);
   const baseShares = Number(metrics?.shares || 0);
   const shouldShowGhosts = baseComments > 0;
 
-  // local UI state
   const [liked, setLiked] = useState(false);
   const [openComments, setOpenComments] = useState(false);
   const [shared, setShared] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
-  // menus
   const [menuOpenMobile, setMenuOpenMobile] = useState(false);
   const [menuOpenDesktop, setMenuOpenDesktop] = useState(false);
   const dotsBtnRef = useRef(null);
 
-  // comments
   const [commentText, setCommentText] = useState("");
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
   const [participantComments, setParticipantComments] = useState(mySubmittedComment ? 1 : 0);
 
-  // derived
   const likes = baseLikes + (liked ? 1 : 0);
   const comments = baseComments + participantComments;
   const shares = baseShares + (shared ? 1 : 0);
@@ -324,7 +303,6 @@ export function PostCard({
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  /* -------- actions ---------- */
   const toggleLike = () => {
     if (disabled) return;
     setLiked((v) => {
@@ -368,21 +346,16 @@ export function PostCard({
     setCommentText("");
   };
 
-  /* -------- menu open/close ---------- */
   const onDotsClick = (e) => {
     if (disabled) return;
     e.stopPropagation();
-    if (isMobile) {
-      setMenuOpenMobile(true);
-    } else {
-      setMenuOpenDesktop((v) => !v);
-    }
+    if (isMobile) setMenuOpenMobile(true);
+    else setMenuOpenDesktop((v) => !v);
     onAction("menu_open", { id, surface: isMobile ? "mobile" : "desktop" });
   };
   const closeMobileMenu = () => setMenuOpenMobile(false);
   const closeDesktopMenu = () => setMenuOpenDesktop(false);
 
-  // close desktop menu on route hash change
   useEffect(() => {
     const closeOnRouteChange = () => setMenuOpenDesktop(false);
     window.addEventListener("hashchange", closeOnRouteChange);
@@ -408,7 +381,6 @@ export function PostCard({
           </div>
         </div>
 
-        {/* Dots button */}
         <button
           ref={dotsBtnRef}
           className="dots"
@@ -424,8 +396,7 @@ export function PostCard({
         </button>
       </header>
 
-      {/* Desktop menu */}
-      {!useIsMobile(700) && (
+      {!isMobile && (
         <DesktopMenu
           anchorEl={dotsBtnRef.current}
           open={menuOpenDesktop}
@@ -472,44 +443,47 @@ export function PostCard({
         </div>
       )}
 
-      {/* Actions row */}
-      <div className="insta-actions" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 6px 10px" }}>
+      {/* Actions row — force neutral color so icons don’t turn blue on mobile */}
+      <div
+        className="insta-actions"
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 6px 10px", color: "#111827" }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button
             aria-label="Like"
             onClick={toggleLike}
-            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, color: "#111827" }}
             disabled={disabled}
           >
             <HeartIcon filled={liked} />
-            {useIsMobile(700) && likes > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{likes.toLocaleString()}</span>}
+            {isMobile && likes > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{likes.toLocaleString()}</span>}
           </button>
 
           <button
             aria-label="Comment"
             onClick={openCommentsPanel}
-            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, color: "#111827" }}
             disabled={disabled}
           >
             <CommentIcon />
-            {useIsMobile(700) && comments > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{comments.toLocaleString()}</span>}
+            {isMobile && comments > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{comments.toLocaleString()}</span>}
           </button>
 
           <button
             aria-label="Share"
             onClick={doShare}
-            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+            style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, color: "#111827" }}
             disabled={disabled}
           >
             <SendIcon />
-            {useIsMobile(700) && shares > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{shares.toLocaleString()}</span>}
+            {isMobile && shares > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{shares.toLocaleString()}</span>}
           </button>
         </div>
 
         <button
           aria-label="Save"
           onClick={toggleSave}
-          style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", position: "relative" }}
+          style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", position: "relative", color: "#111827" }}
           disabled={disabled}
         >
           {saved ? <SaveIconFilled /> : <SaveIcon />}
@@ -541,12 +515,10 @@ export function PostCard({
         </button>
       </div>
 
-      {/* Desktop-only likes line (hide if 0) */}
-      {!useIsMobile(700) && likes > 0 && (
+      {!isMobile && likes > 0 && (
         <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>{likes.toLocaleString()} likes</div>
       )}
 
-      {/* Caption */}
       {text?.trim() && (
         <div style={{ padding: "6px 12px 0 12px", fontSize: 14, lineHeight: 1.4, color: "#111827" }}>
           <span style={{ fontWeight: 600, marginRight: 6 }}>{author || "username"}</span>
@@ -554,27 +526,20 @@ export function PostCard({
         </div>
       )}
 
-      {/* Time */}
       {time && (
         <div style={{ padding: "6px 12px 12px 12px", fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".02em" }}>
           {time}
         </div>
       )}
 
-      {/* Comments overlay modal */}
       {openComments && (
         <Modal
           title="Comments"
           onClose={() => { setOpenComments(false); onAction("comment_close", { id }); }}
           wide={false}
         >
-          {/* ghosts */}
           {(shouldShowGhosts ? Array.from({ length: Math.min(3, baseComments) }) : [0]).map((_, i) => (
-            <div
-              key={`ig-ghost-${i}`}
-              className="ghost-row"
-              style={{ display: "flex", alignItems: "flex-start", gap: ".6rem", marginTop: i === 0 ? 2 : 10 }}
-            >
+            <div key={`ig-ghost-${i}`} className="ghost-row" style={{ display: "flex", alignItems: "flex-start", gap: ".6rem", marginTop: i === 0 ? 2 : 10 }}>
               <div className="ghost-avatar sm" />
               <div className="ghost-lines" style={{ flex: 1 }}>
                 <div className="ghost-line w-80" />
@@ -584,21 +549,10 @@ export function PostCard({
           ))}
 
           {!!mySubmittedComment && (
-            <div
-              className="ghost-row"
-              style={{ alignItems: "flex-start", gap: ".6rem", marginTop: shouldShowGhosts ? 10 : 2 }}
-            >
-              <img
-                src={neutralAvatarDataUrl(28)}
-                alt=""
-                width={28}
-                height={28}
-                style={{ display: "block", borderRadius: "999px", flexShrink: 0 }}
-              />
+            <div className="ghost-row" style={{ alignItems: "flex-start", gap: ".6rem", marginTop: shouldShowGhosts ? 10 : 2 }}>
+              <img src={neutralAvatarDataUrl(28)} alt="" width={28} height={28} style={{ display: "block", borderRadius: "999px", flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: ".9rem", fontWeight: 600, lineHeight: 1.2 }}>
-                  {String(myParticipantId)}
-                </div>
+                <div style={{ fontSize: ".9rem", fontWeight: 600, lineHeight: 1.2 }}>{String(myParticipantId)}</div>
                 <div style={{ marginTop: 2, color: "#111827", fontSize: ".95rem", lineHeight: 1.35, whiteSpace: "pre-wrap" }}>
                   {mySubmittedComment}
                 </div>
@@ -607,36 +561,20 @@ export function PostCard({
           )}
 
           <div style={{ marginTop: 12 }}>
-            <textarea
-              className="textarea"
-              rows={4}
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Write your comment..."
-              disabled={disabled}
-            />
+            <textarea className="textarea" rows={4} value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write your comment..." disabled={disabled} />
           </div>
 
           <div className="row-end" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-            <button className="btn" onClick={() => { setOpenComments(false); onAction("comment_close", { id }); }}>
-              Close
-            </button>
-            <button className="btn primary" onClick={onSubmitComment} disabled={!commentText.trim() || disabled}>
-              Post
-            </button>
+            <button className="btn" onClick={() => { setOpenComments(false); onAction("comment_close", { id }); }}>Close</button>
+            <button className="btn primary" onClick={onSubmitComment} disabled={!commentText.trim() || disabled}>Post</button>
           </div>
         </Modal>
       )}
 
-      {/* MOBILE SHEET MENU */}
-      {useIsMobile(700) && (
+      {isMobile && (
         <MobileSheet open={menuOpenMobile} onClose={closeMobileMenu}>
           <div style={{ display: "grid", gap: 8 }}>
-            <button
-              className="btn"
-              style={sheetBtn({ danger: true })}
-              onClick={() => { onAction("menu_report", { id, surface: "mobile" }); closeMobileMenu(); }}
-            >
+            <button className="btn" style={sheetBtn({ danger: true })} onClick={() => { onAction("menu_report", { id, surface: "mobile" }); closeMobileMenu(); }}>
               Report
             </button>
             <button className="btn" style={sheetBtn({ disabled: true })} disabled>Unfollow</button>
@@ -689,32 +627,18 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
 
   return (
     <div className="feed-wrap">
-      {/* Mobile-only stories ghost bar */}
       {isMobile && <StoryBar />}
 
       <main className="insta-feed">
         {renderPosts.map((p) => (
-          <PostCard
-            key={p.id}
-            post={p}
-            onAction={log}
-            disabled={disabled}
-            registerViewRef={registerViewRef}
-          />
+          <PostCard key={p.id} post={p} onAction={log} disabled={disabled} registerViewRef={registerViewRef} />
         ))}
         <div ref={sentinelRef} aria-hidden="true" />
 
-        {visibleCount >= posts.length && (
-          <div className="feed-end">End of Feed</div>
-        )}
+        {visibleCount >= posts.length && <div className="feed-end">End of Feed</div>}
 
         <div className="feed-submit">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={onSubmit}
-            disabled={disabled === true}
-          >
+          <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
         </div>

@@ -1194,34 +1194,83 @@ a:hover{text-decoration:underline}
 .feed-end{ text-align:center; color:#6b7280; font-size:.95rem; padding:1rem 0; }
 .feed-submit{ text-align:center; margin-top:8px; }
 .feed-submit .btn{ min-width:200px; }
-
-/* ===== Mobile: only posts, no rails; fix left-cutoff; edge-to-edge cards ===== */
+/* ===========================
+   MOBILE — Stories bar & fixes
+   =========================== */
 @media (max-width: 700px){
-  :root{ --feed-min: 0px; --feed-gap: 0px; }  /* kill 640px min on tiny screens */
+  /* Hide desktop feed bar on mobile */
+  .top-rail-placeholder,
+  .ig-topbar { display: none !important; }
 
-  html, body { overflow-x: hidden; }
+  /* Stories bar (non-sticky) */
+  .ig-stories-bar{
+    background:#fff;
+    border-bottom:1px solid var(--line);
+    padding: 8px 6px;     /* distinct spacing so it doesn't merge with first post */
+    margin-bottom: 8px;   /* separation from first card */
+  }
+  .ig-stories-scroll{
+    display:flex;
+    gap:10px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding: 2px 2px;
+  }
+  .ig-stories-scroll::-webkit-scrollbar{ display:none; }
 
-  /* Force single column and remove side padding from the page grid */
-  .page{ grid-template-columns: 1fr !important; padding-inline: 0 !important; }
+  .ig-story-ghost{
+    width:70px; min-width:70px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  /* IG-like gradient ring */
+  .ig-story-ring{
+    width:58px; height:58px; border-radius:999px; padding:3px;
+    background: conic-gradient(#feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75);
+  }
+  .ig-story-avatar{
+    width:100%; height:100%; border-radius:999px; background:#e5e7eb;
+  }
+  .ig-story-name{
+    width:48px; height:8px; border-radius:4px; background:#f0f2f5;
+  }
+
+  /* Mobile layout: one column, no rails, no horizontal scroll */
+  .page{ grid-template-columns:1fr !important; padding-inline:0 !important; }
   .rail, .rail-left, .rail-right{ display:none !important; }
 
-  /* Hide placeholder bars that can nudge layout on tiny screens */
-  .top-rail-placeholder, .ig-topbar{ display:none !important; }
+  html, body{
+    overflow-x: hidden !important;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  html::-webkit-scrollbar, body::-webkit-scrollbar{ display:none; }
 
-  /* Make the feed fill the viewport width (no cutoff) */
+  /* Feed full-bleed; cards flush to edges */
   .insta-feed{
-    width: 100vw; max-width: 100vw;
-    margin: 0; padding: 0 0 16px 0; gap: 12px;
+    width:100vw !important; max-width:100vw !important;
+    margin:0 !important; padding:0 0 16px 0 !important; gap:12px !important;
   }
-
-  /* Cards flush to edges, no drop shadows/borders to avoid grey gutters */
   .insta-card{
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    margin: 0;
+    border:none !important; border-radius:0 !important; box-shadow:none !important; margin:0 !important; background:#fff !important;
   }
 
-  /* Optional: hide non-core chrome below the posts */
-  .feed-end, .feed-submit{ display: none !important; }
+  /* Force neutral icon color for IG action row */
+  .insta-actions, .insta-actions button, .insta-actions svg {
+    color:#111827 !important;
+    fill: currentColor;
+  }
+}
+
+/* Tablet/desktop: keep centered feed */
+@media (min-width: 701px){
+  .insta-feed{
+    width:100%;
+    max-width:470px;
+    margin:0 auto;
+    display:grid;
+    gap:16px;
+    padding:12px 12px 24px;
+  }
 }
