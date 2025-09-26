@@ -1,7 +1,28 @@
-// components-ui-core.jsx (Instagram variant — desktop rails/top bar; mobile edge-to-edge + stories)
+// components-ui-core.jsx (Instagram variant - rails + top placeholder, no floating icons)
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
+
+/* ------------------------------- Tiny helper ------------------------------- */
+function useIsMobile(breakpointPx = 700) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined"
+      ? window.matchMedia(`(max-width:${breakpointPx}px)`).matches
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(max-width:${breakpointPx}px)`);
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener?.("change", onChange);
+    mq.addListener && mq.addListener(onChange); // older Safari
+    return () => {
+      mq.removeEventListener?.("change", onChange);
+      mq.removeListener && mq.removeListener(onChange);
+    };
+  }, [breakpointPx]);
+  return isMobile;
+}
 
 /* ------------------------------- Icons (IG) -------------------------------- */
 export const IconHeart = (p) => (
@@ -82,7 +103,7 @@ export const IconVolumeMute = (p) => (
 export const IconSettings = (p) => (
   <svg viewBox="0 0 24 24" width="18" height="18" {...p}>
     <path
-      d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z
+      d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0  0 0 0 7z
          M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3
          1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
       fill="currentColor"
@@ -105,27 +126,6 @@ export function ActionBtn({ label, onClick, Icon, active, disabled, ...rest }) {
       <span style={{ fontSize: ".9rem", fontWeight: 600, lineHeight: 1 }}>{label}</span>
     </button>
   );
-}
-
-/* ---------------------------- Mobile helpers ------------------------------ */
-function useIsMobile(bp = 700) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined"
-      ? window.matchMedia(`(max-width:${bp}px)`).matches
-      : false
-  );
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia(`(max-width:${bp}px)`);
-    const onChange = (e) => setIsMobile(e.matches);
-    mq.addEventListener?.("change", onChange);
-    mq.addListener && mq.addListener(onChange);
-    return () => {
-      mq.removeEventListener?.("change", onChange);
-      mq.removeListener && mq.removeListener(onChange);
-    };
-  }, [bp]);
-  return isMobile;
 }
 
 /* ------------------------- Instagram Skeleton Feed ------------------------ */
@@ -361,7 +361,7 @@ export function ThankYouOverlay() {
   );
 }
 
-/* ------------------------- Top rail placeholder (desktop only) ------------- */
+/* ------------------------- Top rail placeholder (matches CSS) -------------- */
 function TopRailPlaceholder() {
   return (
     <div className="top-rail-placeholder" aria-hidden="true">
@@ -385,93 +385,79 @@ function TopRailPlaceholder() {
   );
 }
 
-/* ------------------------- Mobile stories (non-sticky ghost) --------------- */
-function MobileStoriesBar() {
-  // re-use your skeleton "stories" look; non-sticky; sits above feed only on mobile
-  return (
-    <div className="ig-stories" aria-hidden="true" style={{ position: "relative" }}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="ig-story">
-          <div className="ghost-story-ring">
-            <div className="ghost-story-avatar" />
-          </div>
-          <div className="ghost-line w-60" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ------------------------- Side rails (left + right) ----------------------- */
-function SideRailsPlaceholder() {
+/* Split into two components so we can place FEED between them in DOM order */
+function LeftRailPlaceholder() {
   return (
-    <>
-      <aside className="rail rail-left" aria-hidden="true">
-        <div className="ghost-card banner" />
-        <div className="ghost-card box">
-          <div className="ghost-profile">
-            <div className="ghost-avatar online" />
-            <div className="ghost-lines" style={{ width: "100%" }}>
-              <div className="ghost-line w-60" />
-              <div className="ghost-line w-35" />
-            </div>
-          </div>
-          <div className="ghost-profile">
-            <div className="ghost-avatar" />
-            <div className="ghost-lines" style={{ width: "100%" }}>
-              <div className="ghost-line w-70" />
-              <div className="ghost-line w-40" />
-            </div>
-          </div>
-          <div className="ghost-profile">
-            <div className="ghost-avatar" />
-            <div className="ghost-lines" style={{ width: "100%" }}>
-              <div className="ghost-line w-45" />
-              <div className="ghost-line w-35" />
-            </div>
-          </div>
-        </div>
-        <div className="ghost-list">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="ghost-item icon">
-              <div className="ghost-icon" />
-              <div className="ghost-lines" style={{ width: "100%" }}>
-                <div className="ghost-line w-70" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      <aside className="rail rail-right" aria-hidden="true">
-        <div className="ghost-card box">
-          <div className="ghost-profile">
-            <div className="ghost-avatar xl online" />
-            <div className="ghost-lines" style={{ width: "100%" }}>
-              <div className="ghost-line w-60" />
-              <div className="ghost-line w-40" />
-            </div>
-          </div>
-          <div className="ghost-row">
-            <div className="ghost-line w-45" />
-          </div>
-          <div className="ghost-row">
+    <aside className="rail rail-left" aria-hidden="true">
+      <div className="ghost-card banner" />
+      <div className="ghost-card box">
+        <div className="ghost-profile">
+          <div className="ghost-avatar online" />
+          <div className="ghost-lines" style={{ width: "100%" }}>
+            <div className="ghost-line w-60" />
             <div className="ghost-line w-35" />
           </div>
         </div>
-
-        <div className="ghost-list">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="ghost-item">
-              <div className="ghost-avatar sm" />
-              <div className="ghost-lines" style={{ width: "100%" }}>
-                <div className="ghost-line w-70" />
-              </div>
-            </div>
-          ))}
+        <div className="ghost-profile">
+          <div className="ghost-avatar" />
+          <div className="ghost-lines" style={{ width: "100%" }}>
+            <div className="ghost-line w-70" />
+            <div className="ghost-line w-40" />
+          </div>
         </div>
-      </aside>
-    </>
+        <div className="ghost-profile">
+          <div className="ghost-avatar" />
+          <div className="ghost-lines" style={{ width: "100%" }}>
+            <div className="ghost-line w-45" />
+            <div className="ghost-line w-35" />
+          </div>
+        </div>
+      </div>
+      <div className="ghost-list">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="ghost-item icon">
+            <div className="ghost-icon" />
+            <div className="ghost-lines" style={{ width: "100%" }}>
+              <div className="ghost-line w-70" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function RightRailPlaceholder() {
+  return (
+    <aside className="rail rail-right" aria-hidden="true">
+      <div className="ghost-card box">
+        <div className="ghost-profile">
+          <div className="ghost-avatar xl online" />
+          <div className="ghost-lines" style={{ width: "100%" }}>
+            <div className="ghost-line w-60" />
+            <div className="ghost-line w-40" />
+          </div>
+        </div>
+        <div className="ghost-row">
+          <div className="ghost-line w-45" />
+        </div>
+        <div className="ghost-row">
+          <div className="ghost-line w-35" />
+        </div>
+      </div>
+
+      <div className="ghost-list">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="ghost-item">
+            <div className="ghost-avatar sm" />
+            <div className="ghost-lines" style={{ width: "100%" }}>
+              <div className="ghost-line w-70" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
   );
 }
 
@@ -490,48 +476,21 @@ export function RouteAwareTopbar() {
     else document.body.classList.remove("admin-mode");
   }, [onAdmin]);
 
-  // Desktop: render the top placeholder bar.
-  // Mobile: render nothing (actual stories row is part of PageScaffold below).
-  if (isMobile) return null;
+  // Hide the desktop top rail on mobile entirely (don’t render it)
+  if (onAdmin || isMobile) return null;
   return <TopRailPlaceholder />;
 }
 
 /* ------------------------- Page scaffold (rails + center) ------------------ */
+/* Correct DOM order: LEFT rail → FEED → RIGHT rail.
+   On mobile, render only FEED (no rails). */
 export function PageScaffold({ children }) {
   const isMobile = useIsMobile(700);
-
-  // Ensure no horizontal scroll on mobile
-  useEffect(() => {
-    if (!isMobile) return;
-    const prev = document.documentElement.style.overflowX;
-    document.documentElement.style.overflowX = "hidden";
-    document.body.style.overflowX = "hidden";
-    return () => {
-      document.documentElement.style.overflowX = prev || "";
-      document.body.style.overflowX = "";
-    };
-  }, [isMobile]);
-
-  if (isMobile) {
-    // Edge-to-edge: no rails, no desktop top bar, stories just above feed, no side padding
-    return (
-      <div className="page" style={{ gridTemplateColumns: "1fr", paddingInline: 0 }}>
-        <div className="container feed" style={{ width: "100%", maxWidth: "100%", margin: 0, padding: 0 }}>
-          <MobileStoriesBar />
-          {children}
-        </div>
-      </div>
-    );
-  }
-
-  // Desktop/tablet: keep rails + desktop top bar; normal centered feed container
   return (
     <div className="page">
-      <SideRailsPlaceholder />
-      <div className="container feed">
-        {children}
-      </div>
-      {/* right rail is part of SideRailsPlaceholder */}
+      {!isMobile && <LeftRailPlaceholder />}
+      <div className="container feed">{children}</div>
+      {!isMobile && <RightRailPlaceholder />}
     </div>
   );
 }
