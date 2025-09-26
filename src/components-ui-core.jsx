@@ -1,31 +1,9 @@
-// components-ui-core.jsx (Instagram variant - rails + top placeholder, no floating icons)
+// components-ui-core.jsx (Instagram variant — desktop rails/top bar; mobile edge-to-edge + stories)
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
 
-/* ------------------------------- Mobile helper ----------------------------- */
-function useIsMobile(breakpointPx = 700) {
-  const isBrowser = typeof window !== "undefined";
-  const [isMobile, setIsMobile] = useState(
-    isBrowser ? window.matchMedia(`(max-width:${breakpointPx}px)`).matches : false
-  );
-  useEffect(() => {
-    if (!isBrowser) return;
-    const mq = window.matchMedia(`(max-width:${breakpointPx}px)`);
-    const h = (e) => setIsMobile(e.matches);
-    mq.addEventListener?.("change", h);
-    mq.addListener && mq.addListener(h);
-    return () => {
-      mq.removeEventListener?.("change", h);
-      mq.removeListener && mq.removeListener(h);
-    };
-  }, [breakpointPx, isBrowser]);
-  return isMobile;
-}
-
 /* ------------------------------- Icons (IG) -------------------------------- */
-/* (Keeping exports in case other components import them, but we won't render
-   them in the global chrome anymore.) */
 export const IconHeart = (p) => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...p}>
     <path fill="none" stroke="currentColor" strokeWidth="2" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>
@@ -106,7 +84,7 @@ export const IconSettings = (p) => (
     <path
       d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z
          M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3
-         1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0  0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0  1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
+         1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
       fill="currentColor"
     />
   </svg>
@@ -127,6 +105,27 @@ export function ActionBtn({ label, onClick, Icon, active, disabled, ...rest }) {
       <span style={{ fontSize: ".9rem", fontWeight: 600, lineHeight: 1 }}>{label}</span>
     </button>
   );
+}
+
+/* ---------------------------- Mobile helpers ------------------------------ */
+function useIsMobile(bp = 700) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined"
+      ? window.matchMedia(`(max-width:${bp}px)`).matches
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(max-width:${bp}px)`);
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener?.("change", onChange);
+    mq.addListener && mq.addListener(onChange);
+    return () => {
+      mq.removeEventListener?.("change", onChange);
+      mq.removeListener && mq.removeListener(onChange);
+    };
+  }, [bp]);
+  return isMobile;
 }
 
 /* ------------------------- Instagram Skeleton Feed ------------------------ */
@@ -362,7 +361,7 @@ export function ThankYouOverlay() {
   );
 }
 
-/* ------------------------- Top rail placeholder (matches CSS) -------------- */
+/* ------------------------- Top rail placeholder (desktop only) ------------- */
 function TopRailPlaceholder() {
   return (
     <div className="top-rail-placeholder" aria-hidden="true">
@@ -386,8 +385,24 @@ function TopRailPlaceholder() {
   );
 }
 
+/* ------------------------- Mobile stories (non-sticky ghost) --------------- */
+function MobileStoriesBar() {
+  // re-use your skeleton "stories" look; non-sticky; sits above feed only on mobile
+  return (
+    <div className="ig-stories" aria-hidden="true" style={{ position: "relative" }}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="ig-story">
+          <div className="ghost-story-ring">
+            <div className="ghost-story-avatar" />
+          </div>
+          <div className="ghost-line w-60" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ------------------------- Side rails (left + right) ----------------------- */
-/* These use your .page grid and .rail styles. They’re decorative and sticky. */
 function SideRailsPlaceholder() {
   return (
     <>
@@ -463,7 +478,8 @@ function SideRailsPlaceholder() {
 /* ------------------------- Route-aware top chrome toggle ------------------- */
 export function RouteAwareTopbar() {
   const location = useLocation();
-  const isMobile = useIsMobile(); // NEW
+  const isMobile = useIsMobile(700);
+
   let onAdmin = location.pathname === "/admin";
   if (!onAdmin && typeof window !== "undefined") {
     onAdmin = window.location.hash.startsWith("#/admin");
@@ -474,34 +490,48 @@ export function RouteAwareTopbar() {
     else document.body.classList.remove("admin-mode");
   }, [onAdmin]);
 
-  // Hide top rail on mobile and on /admin
-  if (isMobile || onAdmin) return null;
+  // Desktop: render the top placeholder bar.
+  // Mobile: render nothing (actual stories row is part of PageScaffold below).
+  if (isMobile) return null;
   return <TopRailPlaceholder />;
 }
 
 /* ------------------------- Page scaffold (rails + center) ------------------ */
-/* Wrap your feed with this so the left/right rails render beside it. */
 export function PageScaffold({ children }) {
-  const isMobile = useIsMobile(); // NEW
+  const isMobile = useIsMobile(700);
+
+  // Ensure no horizontal scroll on mobile
+  useEffect(() => {
+    if (!isMobile) return;
+    const prev = document.documentElement.style.overflowX;
+    document.documentElement.style.overflowX = "hidden";
+    document.body.style.overflowX = "hidden";
+    return () => {
+      document.documentElement.style.overflowX = prev || "";
+      document.body.style.overflowX = "";
+    };
+  }, [isMobile]);
 
   if (isMobile) {
-    // No rails; full-bleed centered feed
+    // Edge-to-edge: no rails, no desktop top bar, stories just above feed, no side padding
     return (
       <div className="page" style={{ gridTemplateColumns: "1fr", paddingInline: 0 }}>
         <div className="container feed" style={{ width: "100%", maxWidth: "100%", margin: 0, padding: 0 }}>
+          <MobileStoriesBar />
           {children}
         </div>
       </div>
     );
   }
 
+  // Desktop/tablet: keep rails + desktop top bar; normal centered feed container
   return (
     <div className="page">
       <SideRailsPlaceholder />
       <div className="container feed">
         {children}
       </div>
-      {/* Right rail is already emitted by SideRailsPlaceholder (second aside) */}
+      {/* right rail is part of SideRailsPlaceholder */}
     </div>
   );
 }
