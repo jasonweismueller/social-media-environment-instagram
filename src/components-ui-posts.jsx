@@ -88,7 +88,27 @@ function DotsIcon(props) {
 const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim() + "…" : t);
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
-/* ---------------- Mobile sheet (unchanged) ---------------- */
+/* ---------------- Mobile “Stories” ghost bar ---------------- */
+function StoryBar() {
+  // 10 ghost items, horizontally scrollable (scrollbar hidden via CSS)
+  const items = Array.from({ length: 10 });
+  return (
+    <div className="ig-stories-bar" aria-hidden="true">
+      <div className="ig-stories-scroll">
+        {items.map((_, i) => (
+          <div className="ig-story-ghost" key={i}>
+            <div className="ig-story-ring">
+              <div className="ig-story-avatar" />
+            </div>
+            <div className="ig-story-name" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Mobile sheet ---------------- */
 function MobileSheet({ open, onClose, children }) {
   if (!open) return null;
   return (
@@ -215,7 +235,7 @@ function DesktopMenu({ anchorEl, open, onClose, onPick, id }) {
             disabled={isDisabled}
             tabIndex={isDisabled ? -1 : 0}
             onClick={() => {
-              if (isDisabled) return; // guard
+              if (isDisabled) return;
               onClose?.();
               if (item.action !== "cancel") onPick?.(item.action, { id });
             }}
@@ -266,7 +286,7 @@ export function PostCard({
     time,
   } = post || {};
 
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(700);
 
   // counts
   const baseLikes = useMemo(() => sumReactions(reactions), [reactions]);
@@ -362,7 +382,7 @@ export function PostCard({
   const closeMobileMenu = () => setMenuOpenMobile(false);
   const closeDesktopMenu = () => setMenuOpenDesktop(false);
 
-  // close desktop menu if we navigate/resize aggressively (safety)
+  // close desktop menu on route hash change
   useEffect(() => {
     const closeOnRouteChange = () => setMenuOpenDesktop(false);
     window.addEventListener("hashchange", closeOnRouteChange);
@@ -373,7 +393,6 @@ export function PostCard({
     <article
       ref={refFromTracker}
       className="insta-card"
-      /* IMPORTANT: overflow visible so header popover hit area is never blocked */
       style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 12, overflow: "visible" }}
     >
       {/* Header */}
@@ -398,7 +417,6 @@ export function PostCard({
           aria-haspopup="menu"
           aria-expanded={isMobile ? menuOpenMobile : menuOpenDesktop}
           onClick={onDotsClick}
-          /* Force clickability regardless of global .dots overrides */
           style={{ border: "none", background: "transparent", color: "#6b7280", cursor: "pointer", padding: ".25rem .4rem", lineHeight: 1, display: "inline-flex" }}
           disabled={disabled}
         >
@@ -406,8 +424,8 @@ export function PostCard({
         </button>
       </header>
 
-      {/* Desktop menu (portal; never clipped by overflow) */}
-      {!isMobile && (
+      {/* Desktop menu */}
+      {!useIsMobile(700) && (
         <DesktopMenu
           anchorEl={dotsBtnRef.current}
           open={menuOpenDesktop}
@@ -464,7 +482,7 @@ export function PostCard({
             disabled={disabled}
           >
             <HeartIcon filled={liked} />
-            {isMobile && likes > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{likes.toLocaleString()}</span>}
+            {useIsMobile(700) && likes > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{likes.toLocaleString()}</span>}
           </button>
 
           <button
@@ -474,7 +492,7 @@ export function PostCard({
             disabled={disabled}
           >
             <CommentIcon />
-            {isMobile && comments > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{comments.toLocaleString()}</span>}
+            {useIsMobile(700) && comments > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{comments.toLocaleString()}</span>}
           </button>
 
           <button
@@ -484,7 +502,7 @@ export function PostCard({
             disabled={disabled}
           >
             <SendIcon />
-            {isMobile && shares > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{shares.toLocaleString()}</span>}
+            {useIsMobile(700) && shares > 0 && <span style={{ fontWeight: 600, fontSize: 14 }}>{shares.toLocaleString()}</span>}
           </button>
         </div>
 
@@ -524,7 +542,7 @@ export function PostCard({
       </div>
 
       {/* Desktop-only likes line (hide if 0) */}
-      {!isMobile && likes > 0 && (
+      {!useIsMobile(700) && likes > 0 && (
         <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>{likes.toLocaleString()} likes</div>
       )}
 
@@ -550,6 +568,7 @@ export function PostCard({
           onClose={() => { setOpenComments(false); onAction("comment_close", { id }); }}
           wide={false}
         >
+          {/* ghosts */}
           {(shouldShowGhosts ? Array.from({ length: Math.min(3, baseComments) }) : [0]).map((_, i) => (
             <div
               key={`ig-ghost-${i}`}
@@ -610,7 +629,7 @@ export function PostCard({
       )}
 
       {/* MOBILE SHEET MENU */}
-      {isMobile && (
+      {useIsMobile(700) && (
         <MobileSheet open={menuOpenMobile} onClose={closeMobileMenu}>
           <div style={{ display: "grid", gap: 8 }}>
             <button
@@ -628,7 +647,6 @@ export function PostCard({
         </MobileSheet>
       )}
 
-      {/* Saved toast keyframes */}
       <style>{`
         @keyframes igSavedToast {
           0%   { opacity: 0; transform: translateY(6px); }
@@ -642,11 +660,11 @@ export function PostCard({
 }
 
 /* ---------------- Feed (IG) ---------------- */
-/* ---------------- Feed (IG) ---------------- */
 export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const STEP = 6;
   const FIRST = Math.min(8, posts.length || 0);
   const [visibleCount, setVisibleCount] = useState(FIRST);
+  const isMobile = useIsMobile(700);
 
   useEffect(() => {
     if (!posts?.length) return;
@@ -671,6 +689,9 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
 
   return (
     <div className="feed-wrap">
+      {/* Mobile-only stories ghost bar */}
+      {isMobile && <StoryBar />}
+
       <main className="insta-feed">
         {renderPosts.map((p) => (
           <PostCard
@@ -702,7 +723,4 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   );
 }
 
-
-
-/* (Optional) also export default if some file imports default) */
 export default {};
