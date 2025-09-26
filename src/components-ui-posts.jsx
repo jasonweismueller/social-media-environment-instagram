@@ -1,14 +1,16 @@
 // components-ui-posts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
+  const isBrowser = typeof window !== "undefined";
   const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.matchMedia(`(max-width:${breakpointPx}px)`).matches : false
+    isBrowser ? window.matchMedia(`(max-width:${breakpointPx}px)`).matches : false
   );
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isBrowser) return;
     const mq = window.matchMedia(`(max-width:${breakpointPx}px)`);
     const h = (e) => setIsMobile(e.matches);
     mq.addEventListener?.("change", h);
@@ -17,7 +19,7 @@ function useIsMobile(breakpointPx = 640) {
       mq.removeEventListener?.("change", h);
       mq.removeListener && mq.removeListener(h);
     };
-  }, [breakpointPx]);
+  }, [breakpointPx, isBrowser]);
   return isMobile;
 }
 
@@ -86,27 +88,32 @@ function DotsIcon(props) {
 const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim() + "…" : t);
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
-/* ---------------- Mobile sheet menu ---------------- */
+/* ---------------- Mobile sheet (unchanged) ---------------- */
 function MobileSheet({ open, onClose, children }) {
   if (!open) return null;
   return (
     <div
-      className="modal-backdrop"
-      style={{ background: "rgba(0,0,0,.45)", zIndex: 70 }}
+      role="dialog"
+      aria-modal="true"
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.5)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "flex-end"
+      }}
     >
       <div
-        role="dialog"
-        aria-modal="true"
         style={{
-          position: "fixed",
-          left: 0, right: 0, bottom: 0,
+          width: "100%",
           background: "#1f2937",
           color: "#fff",
           borderTopLeftRadius: 16,
           borderTopRightRadius: 16,
           padding: 8,
-          maxHeight: "70vh",
+          maxHeight: "75vh",
           overflowY: "auto",
           boxShadow: "0 -12px 32px rgba(0,0,0,.35)"
         }}
@@ -119,6 +126,122 @@ function MobileSheet({ open, onClose, children }) {
       </div>
     </div>
   );
+}
+function sheetBtn({ danger = false, disabled = false } = {}) {
+  return {
+    width: "100%",
+    background: disabled ? "#374151" : (danger ? "#ef4444" : "#4b5563"),
+    color: "#fff",
+    border: 0,
+    padding: "10px 12px",
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 15,
+    opacity: disabled ? 0.75 : 1
+  };
+}
+
+/* ---------------- Desktop menu (portal to <body>) ---------------- */
+function DesktopMenu({ anchorEl, open, onClose, onPick, id }) {
+  const [pos, setPos] = useState({ top: 0, left: 0, w: 180 });
+
+  useEffect(() => {
+    if (!open || !anchorEl) return;
+    const place = () => {
+      const r = anchorEl.getBoundingClientRect();
+      const w = 180;
+      const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+      const top = r.bottom + 6;
+      setPos({ top, left, w });
+    };
+    place();
+
+    const onEsc = (e) => e.key === "Escape" && onClose?.();
+    const onDoc = (e) => {
+      const menu = document.getElementById(`ig-menu-${id}`);
+      if (!menu) return;
+      const insideMenu = menu.contains(e.target);
+      const insideBtn = anchorEl.contains(e.target);
+      if (!insideMenu && !insideBtn) onClose?.();
+    };
+
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    document.addEventListener("keydown", onEsc);
+    document.addEventListener("mousedown", onDoc);
+
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      document.removeEventListener("keydown", onEsc);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [open, anchorEl, id, onClose]);
+
+  if (!open) return null;
+
+  const items = [
+    { label: "Report", action: "report", danger: true, disabled: false },
+    { label: "Unfollow", action: "unfollow", disabled: true },
+    { label: "Go to post", action: "goto", disabled: true },
+    { label: "Copy link", action: "copy", disabled: true },
+    { label: "Cancel", action: "cancel", bold: true, disabled: false },
+  ];
+
+  const ui = (
+    <div
+      id={`ig-menu-${id}`}
+      role="menu"
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        minWidth: pos.w,
+        zIndex: 10050,
+        background: "#fff",
+        border: "1px solid var(--line)",
+        borderRadius: 8,
+        boxShadow: "0 12px 32px rgba(0,0,0,.15)",
+        overflow: "hidden"
+      }}
+    >
+      {items.map((item, idx) => {
+        const isDisabled = !!item.disabled;
+        return (
+          <button
+            key={idx}
+            role="menuitem"
+            aria-disabled={isDisabled}
+            disabled={isDisabled}
+            tabIndex={isDisabled ? -1 : 0}
+            onClick={() => {
+              if (isDisabled) return; // guard
+              onClose?.();
+              if (item.action !== "cancel") onPick?.(item.action, { id });
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "center",
+              padding: "10px",
+              border: "none",
+              background: "transparent",
+              fontSize: 14,
+              cursor: isDisabled ? "default" : "pointer",
+              color: isDisabled ? "#9ca3af" : (item.danger ? "#ef4444" : "#111827"),
+              fontWeight: item.bold ? 600 : 400,
+              opacity: isDisabled ? 0.6 : 1,
+              pointerEvents: isDisabled ? "none" : "auto"
+            }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return ReactDOM.createPortal(ui, document.body);
 }
 
 /* ---------------- PostCard (IG) ---------------- */
@@ -158,19 +281,21 @@ export function PostCard({
   const [saved, setSaved] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
-  const [menuOpen, setMenuOpen] = useState(false); // only used on mobile sheet
+  // menus
+  const [menuOpenMobile, setMenuOpenMobile] = useState(false);
+  const [menuOpenDesktop, setMenuOpenDesktop] = useState(false);
+  const dotsBtnRef = useRef(null);
 
-  // comment local state (for live count + rendering your own comment)
+  // comments
   const [commentText, setCommentText] = useState("");
   const [mySubmittedComment, setMySubmittedComment] = useState(post._localMyCommentText || "");
   const [participantComments, setParticipantComments] = useState(mySubmittedComment ? 1 : 0);
 
-  // derive displayed stats
+  // derived
   const likes = baseLikes + (liked ? 1 : 0);
   const comments = baseComments + participantComments;
   const shares = baseShares + (shared ? 1 : 0);
 
-  // participant name for showing the submitted comment (fallback-safe)
   const myParticipantId =
     ((typeof window !== "undefined" && (window.SESSION?.participant_id || window.PARTICIPANT_ID)) || null) ||
     "Participant";
@@ -224,21 +349,32 @@ export function PostCard({
   };
 
   /* -------- menu open/close ---------- */
-  const onDotsClick = () => {
+  const onDotsClick = (e) => {
     if (disabled) return;
+    e.stopPropagation();
     if (isMobile) {
-      setMenuOpen(true); // mobile bottom sheet
+      setMenuOpenMobile(true);
+    } else {
+      setMenuOpenDesktop((v) => !v);
     }
-    // Desktop: keep your original behavior (no UI change, just log)
     onAction("menu_open", { id, surface: isMobile ? "mobile" : "desktop" });
   };
-  const closeMenu = () => setMenuOpen(false);
+  const closeMobileMenu = () => setMenuOpenMobile(false);
+  const closeDesktopMenu = () => setMenuOpenDesktop(false);
+
+  // close desktop menu if we navigate/resize aggressively (safety)
+  useEffect(() => {
+    const closeOnRouteChange = () => setMenuOpenDesktop(false);
+    window.addEventListener("hashchange", closeOnRouteChange);
+    return () => window.removeEventListener("hashchange", closeOnRouteChange);
+  }, []);
 
   return (
     <article
       ref={refFromTracker}
       className="insta-card"
-      style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}
+      /* IMPORTANT: overflow visible so header popover hit area is never blocked */
+      style={{ background: "#fff", border: "1px solid var(--line)", borderRadius: 12, overflow: "visible" }}
     >
       {/* Header */}
       <header className="insta-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px" }}>
@@ -252,17 +388,34 @@ export function PostCard({
             {author || "username"}
           </div>
         </div>
+
+        {/* Dots button */}
         <button
+          ref={dotsBtnRef}
           className="dots"
           title="More"
           aria-label="More"
+          aria-haspopup="menu"
+          aria-expanded={isMobile ? menuOpenMobile : menuOpenDesktop}
           onClick={onDotsClick}
-          style={{ border: "none", background: "transparent", color: "#6b7280", cursor: "pointer" }}
+          /* Force clickability regardless of global .dots overrides */
+          style={{ border: "none", background: "transparent", color: "#6b7280", cursor: "pointer", padding: ".25rem .4rem", lineHeight: 1, display: "inline-flex" }}
           disabled={disabled}
         >
           <DotsIcon />
         </button>
       </header>
+
+      {/* Desktop menu (portal; never clipped by overflow) */}
+      {!isMobile && (
+        <DesktopMenu
+          anchorEl={dotsBtnRef.current}
+          open={menuOpenDesktop}
+          onClose={closeDesktopMenu}
+          onPick={onAction}
+          id={id}
+        />
+      )}
 
       {/* Media */}
       {(hasImage || hasVideo) && (
@@ -361,6 +514,7 @@ export function PostCard({
                 animation: "igSavedToast 1.6s ease forwards",
                 boxShadow: "0 6px 18px rgba(0,0,0,.25)",
                 whiteSpace: "nowrap",
+                zIndex: 10000
               }}
             >
               Saved
@@ -389,7 +543,7 @@ export function PostCard({
         </div>
       )}
 
-      {/* Comments overlay modal (same UX mobile & desktop) */}
+      {/* Comments overlay modal */}
       {openComments && (
         <Modal
           title="Comments"
@@ -455,14 +609,14 @@ export function PostCard({
         </Modal>
       )}
 
-      {/* MOBILE SHEET MENU (desktop keeps your original behavior) */}
+      {/* MOBILE SHEET MENU */}
       {isMobile && (
-        <MobileSheet open={menuOpen} onClose={closeMenu}>
+        <MobileSheet open={menuOpenMobile} onClose={closeMobileMenu}>
           <div style={{ display: "grid", gap: 8 }}>
             <button
               className="btn"
               style={sheetBtn({ danger: true })}
-              onClick={() => { onAction("menu_report", { id }); closeMenu(); }}
+              onClick={() => { onAction("menu_report", { id, surface: "mobile" }); closeMobileMenu(); }}
             >
               Report
             </button>
@@ -474,7 +628,7 @@ export function PostCard({
         </MobileSheet>
       )}
 
-      {/* one-off keyframes for the Saved toast */}
+      {/* Saved toast keyframes */}
       <style>{`
         @keyframes igSavedToast {
           0%   { opacity: 0; transform: translateY(6px); }
@@ -485,20 +639,6 @@ export function PostCard({
       `}</style>
     </article>
   );
-}
-
-function sheetBtn({ danger = false, disabled = false } = {}) {
-  return {
-    width: "100%",
-    background: disabled ? "#374151" : (danger ? "#ef4444" : "#4b5563"),
-    color: "#fff",
-    border: 0,
-    padding: "10px 12px",
-    borderRadius: 10,
-    fontWeight: 600,
-    fontSize: 15,
-    opacity: disabled ? 0.75 : 1
-  };
 }
 
 /* ---------------- Feed (IG) ---------------- */
@@ -529,26 +669,37 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const renderPosts = useMemo(() => posts.slice(0, visibleCount), [posts, visibleCount]);
 
   return (
-    <div style={{ width: "100%" }}>
-      <main
-        className="insta-feed"
-        style={{ width: "100%", maxWidth: 470, margin: "0 auto", display: "grid", gap: 16, padding: "12px 12px 24px" }}
-      >
-        {renderPosts.map((p) => (
-          <PostCard key={p.id} post={p} onAction={log} disabled={disabled} registerViewRef={registerViewRef} />
-        ))}
-        <div ref={sentinelRef} aria-hidden="true" />
-        {visibleCount >= posts.length && (
-          <div style={{ textAlign: "center", color: "#6b7280", fontSize: ".95rem", padding: "1rem 0" }}>End of Feed</div>
-        )}
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <button type="button" className="btn primary" style={{ minWidth: 200 }} onClick={onSubmit} disabled={disabled === true}>
-            Submit
-          </button>
-        </div>
-      </main>
-    </div>
-  );
+  <div className="feed-wrap">
+    <main className="insta-feed">
+      {renderPosts.map((p) => (
+        <PostCard
+          key={p.id}
+          post={p}
+          onAction={log}
+          disabled={disabled}
+          registerViewRef={registerViewRef}
+        />
+      ))}
+
+      <div ref={sentinelRef} aria-hidden="true" />
+
+      {visibleCount >= posts.length && (
+        <div className="feed-end">End of Feed</div>
+      )}
+
+      <div className="feed-submit">
+        <button
+          type="button"
+          className="btn primary"
+          onClick={onSubmit}
+          disabled={disabled === true}
+        >
+          Submit
+        </button>
+      </div>
+    </main>
+  </div>
+);
 }
 
 /* (Optional) also export default if some file imports default) */

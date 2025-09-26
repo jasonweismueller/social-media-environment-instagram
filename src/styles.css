@@ -1060,3 +1060,41 @@ body.admin-mode .ig-topbar { display:none !important; }
 .feed-shell{ position: relative; }
 
 /* Ensure overlays don’t hide the rails (your .app-shell blur already handles content) */
+
+.feed-wrap {
+  width: 100%;
+}
+
+.insta-feed {
+  width: 100%;
+  max-width: 470px;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  padding: 12px 12px 24px;
+}
+
+.feed-end {
+  text-align: center;
+  color: #6b7280;
+  font-size: .95rem;
+  padding: 1rem 0;
+}
+
+.feed-submit {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.feed-submit .btn {
+  min-width: 200px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+  .insta-feed {
+    max-width: 100%;
+    padding: 8px 0 16px;
+    gap: 12px;
+  }
+}
