@@ -1168,3 +1168,60 @@ a:hover{text-decoration:underline}
   /* hide non-core chrome on mobile */
   .feed-end, .feed-submit{ display:none; }
 }
+
+/* ===== Desktop dropdown: "disabled" look for non-Cancel items ===== */
+.menu-item{
+  display:flex; align-items:center; justify-content:center;
+  width:100%; text-align:center; border:0; background:transparent;
+  padding:10px; font-size:14px; cursor:pointer; color:#111827;
+}
+.menu-item.danger{ color:#ef4444; }
+.menu-item.bold{ font-weight:600; }
+.menu-item.disabled{
+  opacity:.45; cursor:not-allowed; pointer-events:none; filter:grayscale(1);
+}
+
+/* ===== Feed wrapper (desktop centered) ===== */
+.feed-wrap { width: 100%; }
+.insta-feed{
+  width: 100%;
+  max-width: 470px;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  padding: 12px 12px 24px;
+}
+.feed-end{ text-align:center; color:#6b7280; font-size:.95rem; padding:1rem 0; }
+.feed-submit{ text-align:center; margin-top:8px; }
+.feed-submit .btn{ min-width:200px; }
+
+/* ===== Mobile: only posts, no rails; fix left-cutoff; edge-to-edge cards ===== */
+@media (max-width: 700px){
+  :root{ --feed-min: 0px; --feed-gap: 0px; }  /* kill 640px min on tiny screens */
+
+  html, body { overflow-x: hidden; }
+
+  /* Force single column and remove side padding from the page grid */
+  .page{ grid-template-columns: 1fr !important; padding-inline: 0 !important; }
+  .rail, .rail-left, .rail-right{ display:none !important; }
+
+  /* Hide placeholder bars that can nudge layout on tiny screens */
+  .top-rail-placeholder, .ig-topbar{ display:none !important; }
+
+  /* Make the feed fill the viewport width (no cutoff) */
+  .insta-feed{
+    width: 100vw; max-width: 100vw;
+    margin: 0; padding: 0 0 16px 0; gap: 12px;
+  }
+
+  /* Cards flush to edges, no drop shadows/borders to avoid grey gutters */
+  .insta-card{
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0;
+  }
+
+  /* Optional: hide non-core chrome below the posts */
+  .feed-end, .feed-submit{ display: none !important; }
+}
