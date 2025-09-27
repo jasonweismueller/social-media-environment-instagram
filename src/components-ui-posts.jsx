@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils";
+import { useInViewAutoplay } from "./utils"; // ⬅️ removed tryEnterFullscreen/exitFullscreen here
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -96,7 +96,6 @@ function useStoriesCount() {
   useEffect(() => {
     const calc = () => {
       const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      // layout knobs (must match CSS)
       const sidePad = 12;      // px horizontal padding of the bar
       const itemW   = 72;      // px card width
       const gapMin  = 10;      // px minimum gap between items
@@ -335,8 +334,8 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  // ✅ Call hook at top level; it will only bind when attached to <video>
-  const videoRef = useInViewAutoplay(0.6);
+  // Autoplay in view (keeps native controls)
+  const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
 
   const toggleLike = () => {
     if (disabled) return;
@@ -397,12 +396,11 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
     return () => window.removeEventListener("hashchange", closeOnRouteChange);
   }, []);
 
-  // 🚫 Ensure only one video plays at a time
+  // Pause other playing videos when this one starts
   const handlePlay = () => {
     const current = videoRef.current;
     if (!current) return;
-    const all = document.querySelectorAll('video[data-ig-video="1"]');
-    all.forEach((v) => {
+    document.querySelectorAll('video[data-ig-video="1"]').forEach(v => {
       if (v !== current && !v.paused) v.pause();
     });
     onAction("video_play", { id });
@@ -462,7 +460,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
                 data-ig-video="1"
                 src={video?.url || video}
                 poster={videoPosterUrl || undefined}
-                // controls={false}  // hide if you want pure IG feel
+                controls
                 playsInline
                 muted
                 loop
@@ -494,7 +492,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         </div>
       )}
 
-      {/* Actions row — force neutral color so icons don’t turn blue on mobile */}
+      {/* Actions row */}
       <div
         className="insta-actions"
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 6px 10px", color: "#111827" }}
@@ -566,8 +564,11 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         </button>
       </div>
 
+      {/* Desktop-only likes label with word “likes” */}
       {!isMobile && likes > 0 && (
-        <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>{likes.toLocaleString()} likes</div>
+        <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>
+          {likes.toLocaleString()} likes
+        </div>
       )}
 
       {text?.trim() && (
@@ -710,6 +711,7 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
             margin: "1.5rem 0"
           }}
         >
+          {/* ⬇️ back to plain onSubmit; no fullscreen here */}
           <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
