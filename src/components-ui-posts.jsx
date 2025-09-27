@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils";
+import { useInViewAutoplay, tryEnterFullscreen, exitFullscreen } from "./utils";
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -96,10 +96,9 @@ function useStoriesCount() {
   useEffect(() => {
     const calc = () => {
       const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      // layout knobs (must match CSS)
-      const sidePad = 12;
-      const itemW = 72;
-      const gapMin = 10;
+      const sidePad = 12;      // px horizontal padding of the bar
+      const itemW   = 72;      // px card width
+      const gapMin  = 10;      // px minimum gap between items
       const usable = vw - sidePad * 2;
       const per = itemW + gapMin;
       const n = Math.max(1, Math.floor((usable + gapMin) / per));
@@ -335,7 +334,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  // ✅ Autoplay in view; start muted (policy), auto-unmute on first gesture while in view
+  // Autoplay in view (keeps native controls)
   const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
 
   const toggleLike = () => {
@@ -675,6 +674,13 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
 
   const renderPosts = useMemo(() => posts.slice(0, visibleCount), [posts, visibleCount]);
 
+  // 🔊 Fullscreen request tied to the Submit click (same gesture)
+  const onSubmitClick = (e) => {
+    // request fullscreen BEFORE any async or awaited work
+    tryEnterFullscreen(document.querySelector(".app") || document.documentElement);
+    onSubmit?.(e);
+  };
+
   return (
     <div className="feed-wrap">
       {isMobile && <StoryBar />}
@@ -709,7 +715,7 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
             margin: "1.5rem 0"
           }}
         >
-          <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
+          <button type="button" className="btn primary" onClick={onSubmitClick} disabled={disabled === true}>
             Submit
           </button>
         </div>
