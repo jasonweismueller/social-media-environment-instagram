@@ -455,21 +455,22 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         <div className="insta-media" style={{ position: "relative", background: "#000" }}>
           <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
             {hasVideo ? (
-              <video
-                ref={videoRef}
-                data-ig-video="1"
-                src={video?.url || video}
-                poster={videoPosterUrl || undefined}
-                controls
-                playsInline
-                muted
-                loop
-                preload="metadata"
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                onPlay={handlePlay}
-                onPause={() => onAction("video_pause", { id })}
-                onEnded={() => onAction("video_ended", { id })}
-              />
+             <video
+  ref={videoRef}
+  data-ig-video="1"
+  src={video?.url || video}
+  poster={videoPosterUrl || undefined}
+  controls
+  playsInline
+  muted
+  autoPlay        // ✅ lets the browser start buffering asap (muted = allowed)
+  loop
+  preload="auto"  // ✅ eager buffering instead of just metadata
+  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+  onPlay={handlePlay}
+  onPause={() => onAction("video_pause", { id })}
+  onEnded={() => onAction("video_ended", { id })}
+/>
             ) : image?.svg ? (
               <div
                 dangerouslySetInnerHTML={{
