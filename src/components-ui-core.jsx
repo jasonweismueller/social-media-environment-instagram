@@ -1,7 +1,8 @@
 // components-ui-core.jsx (Instagram variant - rails + top placeholder, no floating icons)
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { fakeNamesFor as utilsFakeNamesFor, tryEnterFullscreen, exitFullscreen } from "./utils";
+import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
+import { tryEnterFullscreen, exitFullscreen } from "./utils";
 
 /* ------------------------------- Tiny helper ------------------------------- */
 function useIsMobile(breakpointPx = 700) {
@@ -32,7 +33,7 @@ export const IconHeart = (p) => (
 );
 export const IconHeartFill = (p) => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...p}>
-    <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5A4.5 4.5 0 0 1 6.5 4c1.74 0 3.41.81 4.5 2.09A6.01 6.01 0 0 1 21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+    <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5A4.5 4.5 0  0 1 6.5 4c1.74 0 3.41.81 4.5 2.09A6.01 6.01 0  0 1 21 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
   </svg>
 );
 export const IconComment = (p) => (
@@ -105,7 +106,7 @@ export const IconSettings = (p) => (
     <path
       d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0  0 0 0 7z
          M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3
-         1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
+         1.7 1.7 0  0 0-1 1.6v.3a2 2 0 0 1-4 0v-.1a1.7 1.7 0  0 0-1-1.6 1.7 1.7 0  0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0  0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1h-.3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0  0 0-.3-1.9l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0  0 0 1.9.3h.3a1.7 1.7 0  0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0  0 0 1 1.6h.3a1.7 1.7 0  0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0  0 0-.3 1.9v.3a1.7 1.7 0  0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0  0 0-1.6 1z"
       fill="currentColor"
     />
   </svg>
@@ -318,7 +319,44 @@ export function neutralAvatarDataUrl(size = 28) {
 }
 
 /* ----------------- Overlays ------------- */
-tryEnterFullscreen, exitFullscreen
+export function ParticipantOverlay({ onSubmit }) {
+  const [tempId, setTempId] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const cleanId = tempId.trim();
+    if (!cleanId) return;
+
+    // On mobile, request fullscreen right on the same gesture
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
+    if (isMobile) {
+      // Try the root first
+      tryEnterFullscreen(document.documentElement);
+      // Retry shortly after the overlay begins closing (helps Safari timing)
+      setTimeout(() => {
+        tryEnterFullscreen(document.querySelector(".app") || document.body);
+        // Android soft-hide bar nudge (no-op elsewhere)
+        window.scrollTo(0, 1);
+      }, 120);
+    }
+
+    onSubmit(cleanId);
+  };
+
+  return (
+    <div className="modal-backdrop" style={{ background: "rgba(0,0,0,0.6)", zIndex: 100 }}>
+      <div className="modal" style={{ maxWidth: 400, width: "100%" }}>
+        <div className="modal-head"><h3 style={{ margin: 0 }}>Enter Participant ID</h3></div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
+            <input className="input" value={tempId} onChange={(e) => setTempId(e.target.value)} placeholder="Your ID" required />
+            <button type="submit" className="btn primary">Continue</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function LoadingOverlay({ title = "Loading your feed…", subtitle = "This will only take a moment." }) {
   return (
@@ -370,7 +408,6 @@ function TopRailPlaceholder() {
 }
 
 /* ------------------------- Side rails (left + right) ----------------------- */
-/* Split into two components so we can place FEED between them in DOM order */
 function LeftRailPlaceholder() {
   return (
     <aside className="rail rail-left" aria-hidden="true">
@@ -460,14 +497,11 @@ export function RouteAwareTopbar() {
     else document.body.classList.remove("admin-mode");
   }, [onAdmin]);
 
-  // Hide the desktop top rail on mobile entirely (don’t render it)
   if (onAdmin || isMobile) return null;
   return <TopRailPlaceholder />;
 }
 
 /* ------------------------- Page scaffold (rails + center) ------------------ */
-/* Correct DOM order: LEFT rail → FEED → RIGHT rail.
-   On mobile, render only FEED (no rails). */
 export function PageScaffold({ children }) {
   const isMobile = useIsMobile(700);
   return (
