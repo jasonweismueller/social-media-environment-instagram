@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils"; // ⬅️ removed tryEnterFullscreen/exitFullscreen here
+import { useInViewAutoplay } from "./utils"; // no fullscreen utils here
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -334,8 +334,33 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  // Autoplay in view (keeps native controls)
+  // Autoplay in view (keeps native controls). Hook starts muted; unmute allowed via user gesture.
   const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
+
+  // Mobile: reveal native controls only after first tap; always show mute pill
+  const [showControlsMobile, setShowControlsMobile] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onVol = () => setIsMuted(!!v.muted);
+    onVol();
+    v.addEventListener("volumechange", onVol);
+    return () => v.removeEventListener("volumechange", onVol);
+  }, [videoRef]);
+
+  const revealControlsOnMobile = () => {
+    if (isMobile && !showControlsMobile) setShowControlsMobile(true);
+  };
+  const toggleMute = (e) => {
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+    if (!v.paused) v.play().catch(() => {});
+  };
 
   const toggleLike = () => {
     if (disabled) return;
@@ -453,24 +478,71 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       {/* Media */}
       {(hasImage || hasVideo) && (
         <div className="insta-media" style={{ position: "relative", background: "#000" }}>
-          <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
+          <div
+            style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}
+            onClick={revealControlsOnMobile}
+          >
             {hasVideo ? (
-             <video
-  ref={videoRef}
-  data-ig-video="1"
-  src={video?.url || video}
-  poster={videoPosterUrl || undefined}
-  controls
-  playsInline
-  muted
-  autoPlay        // ✅ lets the browser start buffering asap (muted = allowed)
-  loop
-  preload="auto"  // ✅ eager buffering instead of just metadata
-  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-  onPlay={handlePlay}
-  onPause={() => onAction("video_pause", { id })}
-  onEnded={() => onAction("video_ended", { id })}
-/>
+              <>
+                <video
+                  ref={videoRef}
+                  data-ig-video="1"
+                  src={video?.url || video}
+                  poster={videoPosterUrl || undefined}
+                  controls={!isMobile || showControlsMobile}
+                  playsInline
+                  muted
+                  autoPlay
+                  loop
+                  preload="auto"
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  onPlay={handlePlay}
+                  onPause={() => onAction("video_pause", { id })}
+                  onEnded={() => onAction("video_ended", { id })}
+                />
+
+                {/* Mobile-only mute/unmute pill */}
+                {isMobile && (
+                  <button
+                    type="button"
+                    aria-label={isMuted ? "Unmute video" : "Mute video"}
+                    onClick={toggleMute}
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      bottom: 8,
+                      zIndex: 5,
+                      background: "rgba(0,0,0,.55)",
+                      color: "#fff",
+                      border: 0,
+                      borderRadius: 999,
+                      padding: "8px 10px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      lineHeight: 1,
+                      backdropFilter: "blur(2px)"
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      {isMuted ? (
+                        <>
+                          <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
+                          <path d="M15 11l5 5M20 12l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
+                          <path d="M16 9.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                          <path d="M18.5 7a7 7 0 0 1 0 10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                        </>
+                      )}
+                    </svg>
+                    <span style={{ fontWeight: 600 }}>{isMuted ? "Sound off" : "Sound on"}</span>
+                  </button>
+                )}
+              </>
             ) : image?.svg ? (
               <div
                 dangerouslySetInnerHTML={{
@@ -712,7 +784,6 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
             margin: "1.5rem 0"
           }}
         >
-          {/* ⬇️ back to plain onSubmit; no fullscreen here */}
           <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
