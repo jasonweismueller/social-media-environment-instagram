@@ -657,6 +657,42 @@ export function primeVideoCache(url) {
   setTimeout(() => { try { v.src = ""; } catch {} }, 30000);
 }
 
+/* --- In-view autoplay hook for videos --- */
+import { useEffect, useRef, useState } from "react";
+
+export function useInViewAutoplay(threshold = 0.6) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting && entry.intersectionRatio >= threshold),
+      { threshold }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (inView) {
+      v.muted = true;        // ensure muted
+      v.playsInline = true;  // avoid fullscreen on iOS
+      v.autoplay = true;
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, [inView]);
+
+  return ref;
+}
+
 /* ------------------------- POSTS API (multi-feed + cache) ----------------- */
 /* Cache is namespaced by app to avoid cross-app contamination */
 const __postsCache = new Map(); // key: `${APP}::${feedId||''}` -> { at, data }

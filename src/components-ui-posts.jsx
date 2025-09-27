@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
+import { useInViewAutoplay } from "./utils";
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -448,16 +449,25 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         <div className="insta-media" style={{ position: "relative", background: "#000" }}>
           <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
             {hasVideo ? (
-              <video
-                src={video?.url || video}
-                poster={videoPosterUrl || undefined}
-                controls
-                playsInline
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                onPlay={() => onAction("video_play", { id })}
-                onPause={() => onAction("video_pause", { id })}
-                onEnded={() => onAction("video_ended", { id })}
-              />
+  (() => {
+    const videoRef = useInViewAutoplay(0.6);
+    return (
+      <video
+        ref={videoRef}
+        src={video?.url || video}
+        poster={videoPosterUrl || undefined}
+        // controls={false}  // IG-style (hide controls). Keep or remove to taste.
+        playsInline
+        muted
+        loop
+        preload="metadata"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        onPlay={() => onAction("video_play", { id })}
+        onPause={() => onAction("video_pause", { id })}
+        onEnded={() => onAction("video_ended", { id })}
+      />
+    );
+  })()
             ) : image?.svg ? (
               <div
                 dangerouslySetInnerHTML={{
