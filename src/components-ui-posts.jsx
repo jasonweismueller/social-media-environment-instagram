@@ -89,7 +89,6 @@ function DotsIcon(props) {
 const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim() + "…" : t);
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
-/* ---------------- Mobile “Stories” ghost bar (non-sticky) ---------------- */
 /* ---------------- Mobile “Stories” ghost bar (non-sticky, no scroll) ---- */
 function useStoriesCount() {
   const [count, setCount] = useState(0);
@@ -97,19 +96,15 @@ function useStoriesCount() {
   useEffect(() => {
     const calc = () => {
       const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      // layout knobs (must match CSS below)
-      const sidePad = 12;      // px horizontal padding of the bar
-      const itemW   = 72;      // px card width
-      const gapMin  = 10;      // px minimum gap between items
-
-      // How many items can we fit if we use at least gapMin?
+      // layout knobs (must match CSS)
+      const sidePad = 12;
+      const itemW = 72;
+      const gapMin = 10;
       const usable = vw - sidePad * 2;
       const per = itemW + gapMin;
       const n = Math.max(1, Math.floor((usable + gapMin) / per));
-
       setCount(n);
     };
-
     calc();
     window.addEventListener("resize", calc);
     window.addEventListener("orientationchange", calc);
@@ -126,7 +121,6 @@ function StoryBar() {
   const isMobile = useIsMobile(700);
   const n = isMobile ? useStoriesCount() : 0;
   const items = Array.from({ length: n || 0 });
-
   if (!isMobile || n === 0) return null;
 
   return (
@@ -341,6 +335,9 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
+  // ✅ Autoplay in view; start muted (policy), auto-unmute on first gesture while in view
+  const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
+
   const toggleLike = () => {
     if (disabled) return;
     setLiked((v) => {
@@ -400,6 +397,16 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
     return () => window.removeEventListener("hashchange", closeOnRouteChange);
   }, []);
 
+  // Pause other playing videos when this one starts
+  const handlePlay = () => {
+    const current = videoRef.current;
+    if (!current) return;
+    document.querySelectorAll('video[data-ig-video="1"]').forEach(v => {
+      if (v !== current && !v.paused) v.pause();
+    });
+    onAction("video_play", { id });
+  };
+
   return (
     <article
       ref={refFromTracker}
@@ -449,25 +456,21 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         <div className="insta-media" style={{ position: "relative", background: "#000" }}>
           <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
             {hasVideo ? (
-  (() => {
-    const videoRef = useInViewAutoplay(0.6);
-    return (
-      <video
-        ref={videoRef}
-        src={video?.url || video}
-        poster={videoPosterUrl || undefined}
-        // controls={false}  // IG-style (hide controls). Keep or remove to taste.
-        playsInline
-        muted
-        loop
-        preload="metadata"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        onPlay={() => onAction("video_play", { id })}
-        onPause={() => onAction("video_pause", { id })}
-        onEnded={() => onAction("video_ended", { id })}
-      />
-    );
-  })()
+              <video
+                ref={videoRef}
+                data-ig-video="1"
+                src={video?.url || video}
+                poster={videoPosterUrl || undefined}
+                controls
+                playsInline
+                muted
+                loop
+                preload="metadata"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                onPlay={handlePlay}
+                onPause={() => onAction("video_pause", { id })}
+                onEnded={() => onAction("video_ended", { id })}
+              />
             ) : image?.svg ? (
               <div
                 dangerouslySetInnerHTML={{
@@ -490,7 +493,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         </div>
       )}
 
-      {/* Actions row — force neutral color so icons don’t turn blue on mobile */}
+      {/* Actions row */}
       <div
         className="insta-actions"
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 6px 10px", color: "#111827" }}
@@ -563,7 +566,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       </div>
 
       {!isMobile && likes > 0 && (
-        <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>{likes.toLocaleString()} likes</div>
+        <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>{likes.toLocaleString()}</div>
       )}
 
       {text?.trim() && (
@@ -644,7 +647,6 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   );
 }
 
-/* ---------------- Feed (IG) ---------------- */
 /* ---------------- Feed (IG) ---------------- */
 export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const STEP = 6;

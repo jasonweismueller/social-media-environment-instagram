@@ -660,39 +660,75 @@ export function primeVideoCache(url) {
 /* --- In-view autoplay hook for videos --- */
 import { useEffect, useRef, useState } from "react";
 
-export function useInViewAutoplay(threshold = 0.6) {
+export function useInViewAutoplay(threshold = 0.6, opts = {}) {
+  const { startMuted = true, unmuteOnFirstGesture = true } = opts;
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
+  const [didUnmute, setDidUnmute] = useState(false);
 
+  // Observe viewport visibility
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-
     const obs = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting && entry.intersectionRatio >= threshold),
+      ([entry]) =>
+        setInView(entry.isIntersecting && entry.intersectionRatio >= threshold),
       { threshold }
     );
-
     obs.observe(el);
     return () => obs.disconnect();
   }, [threshold]);
 
+  // Autoplay/pause based on inView
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
+
     if (inView) {
-      v.muted = true;        // ensure muted
-      v.playsInline = true;  // avoid fullscreen on iOS
-      v.autoplay = true;
-      v.play().catch(() => {});
+      // Autoplay compliance
+      v.muted = startMuted || !didUnmute;
+      v.playsInline = true;
+
+      v.play().catch(() => {
+        // Some mobile browsers might still need a tap before play
+      });
     } else {
       v.pause();
     }
-  }, [inView]);
+  }, [inView, startMuted, didUnmute]);
+
+  // One-time auto-unmute on first user gesture while in view
+  useEffect(() => {
+    if (!unmuteOnFirstGesture) return;
+    let handled = false;
+
+    const handler = () => {
+      if (handled) return;
+      handled = true;
+
+      const v = ref.current;
+      if (!v) return;
+      if (!inView) return;
+
+      try {
+        v.muted = false;
+        setDidUnmute(true);
+        const p = v.play();
+        if (p && typeof p.then === "function") p.catch(() => {});
+      } catch (_) {}
+      // remove listener after first gesture
+      remove();
+    };
+
+    const events = ["pointerdown", "keydown", "touchstart", "mousedown"];
+    const add = () => events.forEach(e => window.addEventListener(e, handler, { once: true }));
+    const remove = () => events.forEach(e => window.removeEventListener(e, handler, { once: true }));
+    add();
+    return remove;
+  }, [inView, unmuteOnFirstGesture]);
 
   return ref;
 }
-
 /* ------------------------- POSTS API (multi-feed + cache) ----------------- */
 /* Cache is namespaced by app to avoid cross-app contamination */
 const __postsCache = new Map(); // key: `${APP}::${feedId||''}` -> { at, data }
