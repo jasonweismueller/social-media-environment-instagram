@@ -1,7 +1,7 @@
 // components-ui-core.jsx (Instagram variant - rails + top placeholder, no floating icons)
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { fakeNamesFor as utilsFakeNamesFor } from "./utils";
+import { fakeNamesFor as utilsFakeNamesFor, tryEnterFullscreen, exitFullscreen } from "./utils";
 
 /* ------------------------------- Tiny helper ------------------------------- */
 function useIsMobile(breakpointPx = 700) {
@@ -318,23 +318,7 @@ export function neutralAvatarDataUrl(size = 28) {
 }
 
 /* ----------------- Overlays ------------- */
-export function ParticipantOverlay({ onSubmit }) {
-  const [tempId, setTempId] = useState("");
-  const handleSubmit = (e) => { e.preventDefault(); if (tempId.trim()) onSubmit(tempId.trim()); };
-  return (
-    <div className="modal-backdrop" style={{ background: "rgba(0,0,0,0.6)", zIndex: 100 }}>
-      <div className="modal" style={{ maxWidth: 400, width: "100%" }}>
-        <div className="modal-head"><h3 style={{ margin: 0 }}>Enter Participant ID</h3></div>
-        <div className="modal-body">
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: ".75rem" }}>
-            <input className="input" value={tempId} onChange={(e) => setTempId(e.target.value)} placeholder="Your ID" required />
-            <button type="submit" className="btn primary">Continue</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
+tryEnterFullscreen, exitFullscreen
 
 export function LoadingOverlay({ title = "Loading your feed…", subtitle = "This will only take a moment." }) {
   return (
