@@ -598,6 +598,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
 }
 
 /* ---------------- Feed (IG) ---------------- */
+/* ---------------- Feed (IG) ---------------- */
 export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
   const STEP = 6;
   const FIRST = Math.min(8, posts.length || 0);
@@ -635,9 +636,30 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
         ))}
         <div ref={sentinelRef} aria-hidden="true" />
 
-        {visibleCount >= posts.length && <div className="feed-end">End of Feed</div>}
+        {visibleCount >= posts.length && (
+          <div
+            className="feed-end"
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              margin: "1.2rem 0",
+              fontSize: 14,
+              color: "#6b7280"
+            }}
+          >
+            End of Feed
+          </div>
+        )}
 
-        <div className="feed-submit">
+        <div
+          className="feed-submit"
+          style={{
+            gridColumn: "1 / -1",
+            display: "flex",
+            justifyContent: "center",
+            margin: "1.5rem 0"
+          }}
+        >
           <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
