@@ -586,46 +586,31 @@ body.admin-mode .ig-topbar { display:none !important; }
   }
 }
 
-/* keep the mobile stories strip visible (your <StoryBar/>) */
-  .ig-stories-bar { display: block !important; visibility: visible !important; }
-
-  /* ===== Mobile Stories bar (IG rings) ===== */
-@media (max-width: 700px){
-  /* Make sure it actually shows up */
-  .ig-stories-bar{
-    display:block !important;
+/* IG stories bar — no scroll, fits exactly N items computed in JS */
+@media (max-width:700px){
+  .ig-stories-bar.noscroll{
     background:#fff;
     border-bottom:1px solid var(--line);
-    padding:8px 6px;
-    margin:0 0 8px 0;            /* space before first post */
+    padding:8px 12px 10px;   /* <= 12px must match sidePad in JS */
+    margin:0;
   }
-
-  .ig-stories-scroll{
+  .ig-stories-row{
     display:flex;
-    gap:10px;
-    overflow-x:auto;
-    overflow-y:hidden;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-    padding:2px 2px;
+    justify-content:space-between; /* spreads the N items evenly */
+    align-items:flex-start;
+    gap:10px;                      /* minimum visual gap, not used for fit math */
+    overflow:hidden;               /* ensure no accidental scrollbars */
   }
-  .ig-stories-scroll::-webkit-scrollbar{ display:none; }
-
   .ig-story-ghost{
-    width:70px; min-width:70px;
+    flex:0 0 72px;                 /* <= must match itemW in JS */
+    width:72px;
     display:flex; flex-direction:column; align-items:center; gap:6px;
   }
-
-  /* Instagram-like gradient ring */
   .ig-story-ring{
     width:58px; height:58px; border-radius:999px; padding:3px;
     background: conic-gradient(#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5,#feda75);
     display:grid; place-items:center;
   }
-  .ig-story-avatar{
-    width:100%; height:100%; border-radius:999px; background:#e5e7eb;
-  }
-  .ig-story-name{
-    width:48px; height:8px; border-radius:4px; background:#f0f2f5;
-  }
+  .ig-story-avatar{ width:100%; height:100%; border-radius:999px; background:#e5e7eb; }
+  .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }

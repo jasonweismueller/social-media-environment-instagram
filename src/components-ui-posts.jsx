@@ -89,11 +89,48 @@ const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim(
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
 /* ---------------- Mobile “Stories” ghost bar (non-sticky) ---------------- */
+/* ---------------- Mobile “Stories” ghost bar (non-sticky, no scroll) ---- */
+function useStoriesCount() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const calc = () => {
+      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      // layout knobs (must match CSS below)
+      const sidePad = 12;      // px horizontal padding of the bar
+      const itemW   = 72;      // px card width
+      const gapMin  = 10;      // px minimum gap between items
+
+      // How many items can we fit if we use at least gapMin?
+      const usable = vw - sidePad * 2;
+      const per = itemW + gapMin;
+      const n = Math.max(1, Math.floor((usable + gapMin) / per));
+
+      setCount(n);
+    };
+
+    calc();
+    window.addEventListener("resize", calc);
+    window.addEventListener("orientationchange", calc);
+    return () => {
+      window.removeEventListener("resize", calc);
+      window.removeEventListener("orientationchange", calc);
+    };
+  }, []);
+
+  return count;
+}
+
 function StoryBar() {
-  const items = Array.from({ length: 10 });
+  const isMobile = useIsMobile(700);
+  const n = isMobile ? useStoriesCount() : 0;
+  const items = Array.from({ length: n || 0 });
+
+  if (!isMobile || n === 0) return null;
+
   return (
-    <div className="ig-stories-bar" aria-hidden="true">
-      <div className="ig-stories-scroll">
+    <div className="ig-stories-bar noscroll" aria-hidden="true">
+      <div className="ig-stories-row">
         {items.map((_, i) => (
           <div className="ig-story-ghost" key={i}>
             <div className="ig-story-ring">
