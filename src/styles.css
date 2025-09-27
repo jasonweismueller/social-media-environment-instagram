@@ -513,10 +513,9 @@ body:has(.admin-login-wrap) .nav { display:block !important; }
 body.admin-mode .ig-topbar { display:none !important; }
 
 /* ===================== */
-/* IG FEED — MOBILE (consolidated fixes) */
+/* IG FEED — MOBILE (consolidated, minimal) */
 /* ===================== */
 @media (max-width: 700px){
-  /* kill desktop min widths on small screens */
   :root{
     --feed-min: 0px !important;
     --feed-gap: 0px !important;
@@ -530,17 +529,19 @@ body.admin-mode .ig-topbar { display:none !important; }
   }
   html::-webkit-scrollbar, body::-webkit-scrollbar{ display: none; }
 
-  /* one-column layout; no side padding; no rails/bars */
+  /* one-column layout; no side padding; hide desktop rails */
   .page{
     grid-template-columns: 1fr !important;
     padding-inline: 0 !important;
     justify-content: stretch !important;
     justify-items: stretch !important;
   }
-  .rail, .rail-left, .rail-right,
-  .top-rail-placeholder, .ig-topbar{
-    display: none !important;
-  }
+  .rail, .rail-left, .rail-right{ display: none !important; }
+
+  /* keep placeholder desktop top rail hidden on mobile,
+     but allow IG top bar (if you render it) */
+  .top-rail-placeholder{ display: none !important; }
+  body:not(.admin-mode) .ig-topbar{ display: block !important; }
 
   /* feed spans container width (avoid 100vw overshoot) */
   .feed-wrap{ width:100% !important; }
@@ -562,27 +563,8 @@ body.admin-mode .ig-topbar { display:none !important; }
     background:#fff !important;
   }
 
-  /* media sizing: natural flow, no abs positioning */
-  .insta-media,
-  .ig-media,
-  .ghost-media{
-    position:relative !important;
-    width:100% !important;
-    height:auto !important;
-    overflow:hidden;
-  }
-  .insta-media img,
-  .insta-media video,
-  .insta-media svg,
-  .ig-media img,
-  .ig-media video,
-  .ig-media svg{
-    position:static !important;
-    width:100% !important;
-    height:auto !important;
-    object-fit:contain !important; /* change to 'cover' if you prefer crop */
-    display:block !important;
-  }
+  /* ensure the mobile stories strip is visible */
+  .ig-stories-bar{ display:block !important; visibility:visible !important; }
 
   /* show end/submit blocks on mobile */
   .feed-end, .feed-submit, .submit-wrap, .end{
@@ -603,70 +585,3 @@ body.admin-mode .ig-topbar { display:none !important; }
     padding:12px 12px 24px;
   }
 }
-
-/* ===== FIX 1: Mobile media gap / black box between image and footer ===== */
-@media (max-width: 700px){
-  /* Ensure media blocks size naturally and don't reserve a black 16:9 box */
-  .insta-media,
-  .ig-media {
-    position: relative !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    overflow: hidden;
-  }
-
-  .insta-media img,
-  .insta-media svg,
-  .ig-media img,
-  .ig-media svg {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    object-fit: contain !important;
-    background: transparent !important;
-  }
-
-  /* When markup uses the video container for images, neutralize the video box */
-  .video-wrap {
-    background: transparent !important;
-    aspect-ratio: auto !important;
-    max-height: none !important;
-    border-radius: 0 !important;
-  }
-  .video-wrap img,
-  .video-wrap svg {
-    display: block !important;
-    width: 100% !important;
-    height: auto !important;
-    object-fit: contain !important;
-    background: transparent !important;
-  }
-  /* Keep real videos looking correct */
-  .video-wrap .video-el,
-  .video-wrap video {
-    object-fit: contain !important;
-    background: #000 !important; /* only inside the actual video element */
-  }
-
-  /* Optional: avoid extra spacing after media on mobile */
-  .insta-media + .bar-stats,
-  .ig-media + .bar-stats { margin-top: .25rem !important; }
-}
-
-/* ===== FIX 2: Restore the stories/top bar on mobile (non-admin) ===== */
-@media (max-width: 700px){
-  /* Re-enable the IG-like top bar that was previously hidden */
-  body:not(.admin-mode) .ig-topbar{
-    display: block !important;
-  }
-
-  /* If you also use a stories strip component at the very top, ensure it's visible */
-  .ig-stories,
-  .ig-stories-bar{
-    display: block !important;
-    visibility: visible !important;
-  }
-}
-
