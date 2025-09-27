@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils"; // no fullscreen utils here
+import { useInViewAutoplay } from "./utils";
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -96,9 +96,9 @@ function useStoriesCount() {
   useEffect(() => {
     const calc = () => {
       const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      const sidePad = 12;      // px horizontal padding of the bar
-      const itemW   = 72;      // px card width
-      const gapMin  = 10;      // px minimum gap between items
+      const sidePad = 12;
+      const itemW = 72;
+      const gapMin = 10;
       const usable = vw - sidePad * 2;
       const per = itemW + gapMin;
       const n = Math.max(1, Math.floor((usable + gapMin) / per));
@@ -334,10 +334,10 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  // Autoplay in view (keeps native controls). Hook starts muted; unmute allowed via user gesture.
+  // Autoplay in view; start muted; allow unmute on gesture.
   const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
 
-  // Mobile: reveal native controls only after first tap; always show mute pill
+  // Mobile: only show native controls after first tap.
   const [showControlsMobile, setShowControlsMobile] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
@@ -481,6 +481,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
           <div
             style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}
             onClick={revealControlsOnMobile}
+            onTouchStart={revealControlsOnMobile}
           >
             {hasVideo ? (
               <>
@@ -501,45 +502,34 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
                   onEnded={() => onAction("video_ended", { id })}
                 />
 
-                {/* Mobile-only mute/unmute pill */}
-                {isMobile && (
+                {/* Mobile-only mute pill; icon-only; hide if controls are visible or video isn't muted */}
+                {isMobile && !showControlsMobile && isMuted && (
                   <button
                     type="button"
-                    aria-label={isMuted ? "Unmute video" : "Mute video"}
+                    aria-label="Unmute video"
                     onClick={toggleMute}
                     style={{
                       position: "absolute",
                       right: 8,
-                      bottom: 8,
+                      top: 8,         // away from native controls area
                       zIndex: 5,
                       background: "rgba(0,0,0,.55)",
                       color: "#fff",
                       border: 0,
                       borderRadius: 999,
-                      padding: "8px 10px",
+                      padding: 8,
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      lineHeight: 1,
+                      justifyContent: "center",
+                      lineHeight: 0,
                       backdropFilter: "blur(2px)"
                     }}
                   >
                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      {isMuted ? (
-                        <>
-                          <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
-                          <path d="M15 11l5 5M20 12l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                        </>
-                      ) : (
-                        <>
-                          <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
-                          <path d="M16 9.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                          <path d="M18.5 7a7 7 0 0 1 0 10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                        </>
-                      )}
+                      {/* muted icon */}
+                      <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
+                      <path d="M15 11l5 5M20 12l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                     </svg>
-                    <span style={{ fontWeight: 600 }}>{isMuted ? "Sound off" : "Sound on"}</span>
                   </button>
                 )}
               </>
