@@ -122,29 +122,26 @@ export function IGCarousel({ items = [] }) {
       </div>
 
       {hasMany && (
-        <>
-          <button
-            className="igcar-arrow left"
-            onClick={() => setIdx(i => Math.max(0, i - 1))}
-            aria-label="Previous"
-          />
-          <button
-            className="igcar-arrow right"
-            onClick={() => setIdx(i => Math.min(items.length - 1, i + 1))}
-            aria-label="Next"
-          />
-          <div className="igcar-dots">
-            {items.map((_, i) => (
-              <button
-                key={i}
-                className={`dot ${i === idx ? "on" : ""}`}
-                onClick={() => setIdx(i)}
-                aria-label={`Slide ${i + 1}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
+  <>
+    {/* mobile count pill */}
+    <div
+      className="igcar-count"
+      aria-live="polite"
+      aria-atomic="true"
+      role="status"
+    >
+      {idx + 1} / {items.length}
+    </div>
+
+    <button className="igcar-arrow left"  onClick={() => setIdx(i => Math.max(0, i-1))} aria-label="Previous" />
+    <button className="igcar-arrow right" onClick={() => setIdx(i => Math.min(items.length-1, i+1))} aria-label="Next" />
+    <div className="igcar-dots">
+      {items.map((_, i) => (
+        <button key={i} className={`dot ${i===idx?"on":""}`} onClick={() => setIdx(i)} aria-label={`Slide ${i+1}`} />
+      ))}
+    </div>
+  </>
+)}
     </div>
   );
 }
