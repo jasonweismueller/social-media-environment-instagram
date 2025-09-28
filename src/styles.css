@@ -738,12 +738,20 @@ body.admin-mode .ig-topbar { display:none !important; }
   .igcar-arrow{ display:none !important; }
 }
 
-.ig-caption-row {
-  padding: 6px 12px 0 12px;
-  font-size: 14px;
-  line-height: 1.4;
-  color: #111827;
+/* keep username + caption on one line initially */
+.ig-caption-row .text-wrap{
+  display:inline-block;
+  vertical-align:baseline;
+  max-width:100%;
+  position:relative; /* keep fade-more positioned */
 }
+.ig-caption-row .text{
+  display:inline;
+  margin:0;            /* override the global .text margin */
+  white-space:pre-wrap;
+}
+
+
 
 .ig-username {
   font-weight: 600;
