@@ -738,6 +738,7 @@ body.admin-mode .ig-topbar { display:none !important; }
   .igcar-arrow{ display:none !important; }
 }
 
+
 /* keep username + caption on one line initially */
 .ig-caption-row .text-wrap{
   display:inline-block;
@@ -799,4 +800,19 @@ body.admin-mode .ig-topbar { display:none !important; }
 .ig-caption-row .fade-more::before{
   content:""; position:absolute; right:100%; top:0; width:6ch; height:100%;
   background:linear-gradient(90deg, rgba(255,255,255,0), var(--card));
+}
+
+
+.ig-caption-row .text-wrap {
+  display: inline;       /* instead of block */
+}
+
+.ig-caption-row .text.clamp {
+  display: -webkit-box;  /* keep line clamping */
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+
+  /* important: keep inline flow */
+  vertical-align: baseline;
 }
