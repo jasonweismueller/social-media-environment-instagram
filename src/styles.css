@@ -645,8 +645,8 @@ body.admin-mode .ig-topbar { display:none !important; }
 /* the “more” button aligned with baseline */
 .ig-more{
   position:absolute;
-  right:0.25ch;
-  bottom:0;                  /* ← anchor to bottom instead of top/50% */
+  right:2.5ch;
+  bottom:2;                  /* ← anchor to bottom instead of top/50% */
   z-index:2;
   display:inline;
   background:none;
