@@ -635,3 +635,17 @@ body.admin-mode .ig-topbar { display:none !important; }
   font-size: .9rem;
   cursor: pointer;
 }
+
+/* optional fade tail (place button over the end) */
+.ig-caption-wrap .ig-more{
+  position: relative;
+}
+.ig-caption-wrap .ig-more::before{
+  content:"";
+  position:absolute;
+  right:100%;
+  top:0;
+  height:1.35em;
+  width:6ch;
+  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
+}
