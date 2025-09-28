@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl, PostText } from "./components-ui-core";
+import { IGCarousel } from "./components-ui-ig-carousel";
 import { useInViewAutoplay } from "./utils";
 
 /* ---------------- Small utils ---------------- */
@@ -300,6 +301,9 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
     videoPosterUrl, reactions, metrics, time,
   } = post || {};
 
+  const images = Array.isArray(post?.images) ? post.images : [];
+  const hasCarousel = imageMode === "multi" && images.length > 1;
+
   const isMobile = useIsMobile(700);
 
   const baseLikes = useMemo(() => sumReactions(reactions), [reactions]);
@@ -453,56 +457,88 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       )}
 
       {/* Media */}
-      {(hasImage || hasVideo) && (
-        <div className="insta-media" style={{ position: "relative", background: "#000" }}>
-          <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
-            {hasVideo ? (
-              <video
-                ref={videoRef}
-                data-ig-video="1"
-                src={video?.url || video}
-                poster={videoPosterUrl || undefined}
-                controls
-                playsInline
-                muted
-                autoPlay
-                loop
-                preload="auto"
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                onPlay={handlePlay}
-                onPause={() => onAction("video_pause", { id })}
-                onEnded={() => onAction("video_ended", { id })}
-              />
-            ) : image?.svg ? (
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: image.svg.replace(
-                    "<svg ",
-                    "<svg preserveAspectRatio='xMidYMid slice' style='position:absolute;inset:0;display:block;width:100%;height:100%' "
-                  ),
-                }}
-              />
-            ) : image?.url ? (
-              <img
-  src={image.url}
-  alt={image.alt || ""}
-  style={{
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-    // NEW: honor focal point
-    objectPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
-  }}
-  loading="lazy"
-  decoding="async"
-/>
-            ) : null}
-          </div>
-        </div>
-      )}
+{(hasVideo || hasCarousel || hasImage) && (
+  <div className="insta-media" style={{ position: "relative", background: "#000" }}>
+    <div
+      style={{
+        width: "100%",
+        aspectRatio: hasVideo ? "4 / 5" : "1 / 1",
+        maxHeight: "80vh",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {hasVideo ? (
+        <video
+          ref={videoRef}
+          data-ig-video="1"
+          src={video?.url || video}
+          poster={videoPosterUrl || undefined}
+          controls
+          playsInline
+          muted
+          autoPlay
+          loop
+          preload="auto"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          }}
+          onPlay={handlePlay}
+          onPause={() => onAction("video_pause", { id })}
+          onEnded={() => onAction("video_ended", { id })}
+        />
+      ) : hasCarousel ? (
+        <IGCarousel items={images} />
+      ) : imageMode === "multi" && images.length === 1 ? (
+        <img
+          src={images[0].url}
+          alt={images[0].alt || ""}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          }}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : image?.svg ? (
+        <div
+          dangerouslySetInnerHTML={{
+            __html: image.svg.replace(
+              "<svg ",
+              "<svg preserveAspectRatio='xMidYMid slice' style='position:absolute;inset:0;display:block;width:100%;height:100%' "
+            ),
+          }}
+        />
+      ) : image?.url ? (
+        <img
+          src={image.url}
+          alt={image.alt || ""}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            // honor focal point if provided
+            objectPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
+          }}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : null}
+    </div>
+  </div>
+)}
 
       {/* Actions row */}
       <div

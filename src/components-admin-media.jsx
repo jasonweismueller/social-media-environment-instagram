@@ -1,21 +1,11 @@
 // components-admin-media.jsx
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { randomSVG, uploadFileToS3ViaSigner, uploadImageToS3 } from "./utils";
+import { randomSVG, uploadFileToS3ViaSigner } from "./utils";
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
-/**
- * Square preview that lets you drag to set the image focal point (object-position).
- * Stores values as percentages (0–100).
- */
-function ImageCropper({
-  src,
-  alt = "",
-  focalX = 50,
-  focalY = 50,
-  onChange,
-  disabled = false,
-}) {
+/* ================== Square focal-point cropper (shared) ================== */
+function ImageCropper({ src, alt = "", focalX = 50, focalY = 50, onChange, disabled = false }) {
   const wrapRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -38,7 +28,6 @@ function ImageCropper({
 
   const stopDrag = useCallback(() => setDragging(false), []);
 
-  // Event listeners on document for smooth drag
   React.useEffect(() => {
     if (!dragging) return;
     const move = (ev) => onPointerMove(ev);
@@ -64,15 +53,9 @@ function ImageCropper({
       <div
         ref={wrapRef}
         style={{
-          width: "100%",
-          maxWidth: 560,
-          margin: "8px 0",
-          aspectRatio: "1 / 1",
-          position: "relative",
-          borderRadius: 8,
-          overflow: "hidden",
-          background: "#f3f4f6",
-          userSelect: "none",
+          width: "100%", maxWidth: 560, margin: "8px 0",
+          aspectRatio: "1 / 1", position: "relative", borderRadius: 8, overflow: "hidden",
+          background: "#f3f4f6", userSelect: "none",
           cursor: disabled ? "default" : (dragging ? "grabbing" : "grab"),
           boxShadow: "inset 0 0 0 1px rgba(0,0,0,.05)",
         }}
@@ -83,73 +66,173 @@ function ImageCropper({
           <img
             src={src}
             alt={alt}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition,
-              display: "block",
-            }}
+            style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition, display:"block" }}
             draggable={false}
           />
         ) : (
-          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#9ca3af" }}>
-            No image
-          </div>
+          <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#9ca3af" }}>No image</div>
         )}
-
-        {/* Focal marker */}
         {src && (
           <div
             style={{
               position: "absolute",
               left: `calc(${focalX}% - 8px)`,
               top: `calc(${focalY}% - 8px)`,
-              width: 16,
-              height: 16,
-              borderRadius: "50%",
-              border: "2px solid white",
-              background: "rgba(0,0,0,.35)",
-              boxShadow: "0 0 0 2px rgba(0,0,0,.15)",
-              pointerEvents: "none",
+              width: 16, height: 16, borderRadius: "50%",
+              border: "2px solid white", background: "rgba(0,0,0,.35)",
+              boxShadow: "0 0 0 2px rgba(0,0,0,.15)", pointerEvents: "none",
             }}
           />
         )}
       </div>
 
       <div className="grid-2" style={{ gap: 12 }}>
-        <label>
-          X position
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={focalX}
-            onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY })}
-            disabled={disabled}
-          />
+        <label> X position
+          <input type="range" min={0} max={100} value={focalX}
+                 onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY })} disabled={disabled}/>
         </label>
-        <label>
-          Y position
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={focalY}
-            onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value) })}
-            disabled={disabled}
-          />
+        <label> Y position
+          <input type="range" min={0} max={100} value={focalY}
+                 onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value) })} disabled={disabled}/>
         </label>
       </div>
-      <div className="subtle" style={{ marginTop: 4 }}>
-        Tip: drag inside the square to reposition; sliders fine-tune.
-      </div>
+      <div className="subtle" style={{ marginTop: 4 }}>Tip: drag inside the square to reposition; sliders fine-tune.</div>
     </div>
   );
 }
 
+/* ================== Tiny thumbnail strip (carousel editor) ================== */
+function Thumb({ src, active, onClick, onRemove, idx }) {
+  return (
+    <div style={{ position:"relative" }}>
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          width:72, height:72, borderRadius:8, overflow:"hidden", border: active ? "2px solid #2563eb" : "1px solid var(--line)",
+          padding:0, background:"#fff", cursor:"pointer"
+        }}
+        title={`Image ${idx+1}`}
+      >
+        {src ? (
+          <img src={src} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
+        ) : <div style={{ width:"100%", height:"100%", background:"#f3f4f6" }}/>}
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Remove"
+        style={{
+          position:"absolute", top:-6, right:-6, width:22, height:22, borderRadius:999,
+          border:"1px solid #e5e7eb", background:"#fff", cursor:"pointer", boxShadow:"0 2px 8px rgba(0,0,0,.12)"
+        }}
+      >×</button>
+    </div>
+  );
+}
+
+function CarouselEditor({ images, setImages, feedId, isNew }) {
+  const [sel, setSel] = useState(0);
+  const safeSel = Math.min(sel, Math.max(0, (images?.length || 1) - 1));
+  const current = images?.[safeSel] || null;
+
+  const replaceAt = (i, next) => setImages((arr) => arr.map((it, idx) => (idx === i ? next : it)));
+  const removeAt = (i) => setImages((arr) => arr.filter((_, idx) => idx !== i));
+
+  const uploadMany = async (files) => {
+    const picked = Array.from(files || []);
+    if (!picked.length) return;
+    const el = document.querySelector(".modal h3, .section-title");
+    try {
+      let count = 0;
+      for (const f of picked) {
+        const setPct = (pct) => {
+          if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}% (${count+1}/${picked.length})`;
+        };
+        const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, prefix: "images", onProgress: setPct });
+        setImages((arr) => [...arr, { url: cdnUrl, alt: f.name || "Image", focalX: 50, focalY: 50 }]);
+        count++;
+      }
+      if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
+      alert("Images uploaded ✔");
+    } catch (e) {
+      console.error(e);
+      alert(String(e?.message || "Upload failed."));
+    }
+  };
+
+  return (
+    <div style={{ display:"grid", gap:12 }}>
+      {/* thumbs */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {images.map((img, i) => (
+          <Thumb
+            key={`${img.url || "img"}-${i}`}
+            src={img.url}
+            active={i === safeSel}
+            idx={i}
+            onClick={() => setSel(i)}
+            onRemove={() => {
+              const nextIdx = Math.max(0, Math.min(i, images.length - 2));
+              removeAt(i);
+              setSel(nextIdx);
+            }}
+          />
+        ))}
+        <label
+          style={{
+            width:72, height:72, borderRadius:8, border:"1px dashed var(--line)",
+            display:"grid", placeItems:"center", color:"#6b7280", cursor:"pointer", background:"#fff"
+          }}
+          title="Add images"
+        >
+          + Add
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => { uploadMany(e.target.files); e.target.value = ""; }}
+            style={{ display:"none" }}
+          />
+        </label>
+      </div>
+
+      {/* add via URL */}
+      <div className="grid-2">
+        <label> Add image by URL
+          <input
+            className="input"
+            placeholder="https://…/image.jpg"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = e.currentTarget.value.trim();
+                if (!v) return;
+                setImages((arr) => [...arr, { url: v, alt: "Image", focalX: 50, focalY: 50 }]);
+                e.currentTarget.value = "";
+              }
+            }}
+          />
+        </label>
+        <div />
+      </div>
+
+      {/* cropper for selected */}
+      {current?.url ? (
+        <ImageCropper
+          src={current.url}
+          alt={current.alt || ""}
+          focalX={Number(current.focalX ?? 50)}
+          focalY={Number(current.focalY ?? 50)}
+          onChange={({ focalX, focalY }) => replaceAt(safeSel, { ...current, focalX, focalY })}
+        />
+      ) : (
+        <div className="subtle">Select a thumbnail to edit focal point.</div>
+      )}
+    </div>
+  );
+}
+
+/* ========================= Main fieldset ========================= */
 export function MediaFieldset({
   editing,
   setEditing,
@@ -158,9 +241,19 @@ export function MediaFieldset({
   setUploadingVideo,
   setUploadingPoster,
 }) {
+  // Single-image helpers
   const imgUrl = editing.image?.url || "";
   const focalX = Number(editing.image?.focalX ?? 50);
   const focalY = Number(editing.image?.focalY ?? 50);
+
+  const imageMode = editing.imageMode || "none";
+  const images = Array.isArray(editing.images) ? editing.images : [];
+
+  const setImages = (updater) =>
+    setEditing((ed) => {
+      const next = typeof updater === "function" ? updater(ed.images || []) : updater;
+      return { ...ed, images: next };
+    });
 
   return (
     <>
@@ -170,49 +263,63 @@ export function MediaFieldset({
           <select
             className="select"
             value={
-              editing.videoMode !== "none" ? "video"
-              : (editing.imageMode !== "none" ? "image" : "none")
+              editing.videoMode !== "none"
+                ? "video"
+                : imageMode === "multi"
+                ? "carousel"
+                : (imageMode !== "none" ? "image" : "none")
             }
             onChange={(e) => {
               const type = e.target.value;
               if (type === "none") {
-                setEditing(ed => ({ ...ed, imageMode: "none", image: null, videoMode: "none", video: null, videoPosterUrl: "" }));
+                setEditing(ed => ({ ...ed,
+                  imageMode: "none", image: null, images: [],
+                  videoMode: "none", video: null, videoPosterUrl: "" }));
               } else if (type === "image") {
                 setEditing(ed => ({
                   ...ed,
-                  videoMode: "none",
-                  video: null,
-                  videoPosterUrl: "",
-                  imageMode: (ed.imageMode === "none" ? "random" : ed.imageMode) || "random",
-                  image: ed.image || { ...randomSVG("Image"), focalX: 50, focalY: 50 }
+                  videoMode: "none", video: null, videoPosterUrl: "",
+                  imageMode: (ed.imageMode === "none" || ed.imageMode === "multi" ? "random" : ed.imageMode) || "random",
+                  images: [], // ensure not in multi mode
+                  image: ed.image || { ...randomSVG("Image"), focalX: 50, focalY: 50 },
+                }));
+              } else if (type === "carousel") {
+                setEditing(ed => ({
+                  ...ed,
+                  videoMode: "none", video: null, videoPosterUrl: "",
+                  imageMode: "multi",
+                  // seed images from single image if present, else empty
+                  images: (ed.images && ed.images.length)
+                    ? ed.images
+                    : (ed.image?.url ? [{ ...ed.image }] : []),
                 }));
               } else if (type === "video") {
                 setEditing(ed => ({
                   ...ed,
-                  imageMode: "none",
-                  image: null,
+                  imageMode: "none", image: null, images: [],
                   videoMode: (ed.videoMode === "none" ? "url" : ed.videoMode) || "url",
-                  video: ed.video || { url: "" }
+                  video: ed.video || { url: "" },
                 }));
               }
             }}
           >
             <option value="none">None</option>
             <option value="image">Image</option>
+            <option value="carousel">Carousel (multiple images)</option>
             <option value="video">Video</option>
           </select>
         </label>
 
-        {/* IMAGE controls */}
-        {editing.videoMode === "none" && editing.imageMode !== "none" && (
+        {/* ============ IMAGE (single) ============ */}
+        {editing.videoMode === "none" && imageMode !== "none" && imageMode !== "multi" && (
           <>
             <div className="grid-2">
               <label>Image mode
                 <select
                   className="select"
-                  value={editing.imageMode}
+                  value={imageMode}
                   onChange={(e) => {
-                    const m = e.target.value;
+                    const m = e.target.value; // random | upload | url | none
                     let image = editing.image;
                     if (m === "none") image = null;
                     if (m === "random") image = { ...randomSVG("Image"), focalX: 50, focalY: 50 };
@@ -227,7 +334,7 @@ export function MediaFieldset({
               </label>
             </div>
 
-            {editing.imageMode === "url" && (
+            {imageMode === "url" && (
               <label>Image URL
                 <input
                   className="input"
@@ -248,33 +355,23 @@ export function MediaFieldset({
               </label>
             )}
 
-            {editing.imageMode === "upload" && (
+            {imageMode === "upload" && (
               <label>Upload image
                 <input
-                  type="file"
-                  accept="image/*"
+                  type="file" accept="image/*"
                   onChange={async (e) => {
                     const f = e.target.files?.[0];
                     if (!f) return;
                     try {
-                      // Show lightweight progress in the title
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
-
-                      // Upload via signer (same helper used for videos/posters)
                       const { cdnUrl } = await uploadFileToS3ViaSigner({
-                        file: f,
-                        feedId,
-                        onProgress: setPct,
-                        prefix: "images",
+                        file: f, feedId, onProgress: setPct, prefix: "images",
                       });
-
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
-
-                      // Initialize focal point to center
                       setEditing((ed) => ({
                         ...ed,
                         imageMode: "url",
@@ -285,46 +382,30 @@ export function MediaFieldset({
                       console.error(err);
                       alert(String(err?.message || "Image upload failed."));
                     } finally {
-                      e.target.value = ""; // allow re-pick
+                      e.target.value = "";
                     }
                   }}
                 />
               </label>
             )}
 
-            {/* Crop/position tool + preview (for URL mode) */}
-            {editing.imageMode !== "none" && imgUrl && (
+            {imageMode !== "none" && imgUrl && (
               <ImageCropper
                 src={imgUrl}
                 alt={editing.image?.alt || ""}
                 focalX={focalX}
                 focalY={focalY}
                 onChange={({ focalX: x, focalY: y }) =>
-                  setEditing((ed) => ({
-                    ...ed,
-                    image: { ...(ed.image || {}), focalX: x, focalY: y },
-                  }))
+                  setEditing((ed) => ({ ...ed, image: { ...(ed.image || {}), focalX: x, focalY: y } }))
                 }
               />
             )}
 
-            {/* Random SVG preview */}
-            {editing.imageMode === "random" && editing.image?.svg && (
-              <div
-                className="img-preview"
-                style={{
-                  maxWidth:"100%",
-                  maxHeight:"min(40vh, 360px)",
-                  minHeight:120,
-                  overflow:"hidden",
-                  borderRadius:8,
-                  background:"#f9fafb",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center",
-                  padding:8
-                }}
-              >
+            {imageMode === "random" && editing.image?.svg && (
+              <div className="img-preview" style={{
+                maxWidth:"100%", maxHeight:"min(40vh, 360px)", minHeight:120, overflow:"hidden",
+                borderRadius:8, background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:8
+              }}>
                 <div
                   className="svg-wrap"
                   dangerouslySetInnerHTML={{
@@ -339,7 +420,12 @@ export function MediaFieldset({
           </>
         )}
 
-        {/* VIDEO controls */}
+        {/* ============ CAROUSEL (multi) ============ */}
+        {editing.videoMode === "none" && imageMode === "multi" && (
+          <CarouselEditor images={images} setImages={setImages} feedId={feedId} isNew={isNew} />
+        )}
+
+        {/* ============ VIDEO ============ */}
         {editing.videoMode !== "none" && (
           <>
             <div className="grid-2">
@@ -370,10 +456,7 @@ export function MediaFieldset({
                   placeholder="https://…/clip.mp4 (CloudFront URL)"
                   value={editing.video?.url || ""}
                   onChange={(e) =>
-                    setEditing(ed => ({
-                      ...ed,
-                      video: { ...(ed.video || {}), url: e.target.value }
-                    }))
+                    setEditing(ed => ({ ...ed, video: { ...(ed.video || {}), url: e.target.value } }))
                   }
                 />
               </label>
@@ -382,40 +465,26 @@ export function MediaFieldset({
             {editing.videoMode === "upload" && (
               <label>Upload video
                 <input
-                  type="file"
-                  accept="video/*"
+                  type="file" accept="video/*"
                   onChange={async (e) => {
                     const f = e.target.files?.[0]; if (!f) return;
                     try {
                       setUploadingVideo?.(true);
-
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
-
-                      const { cdnUrl } = await uploadFileToS3ViaSigner({
-                        file: f,
-                        feedId,
-                        onProgress: setPct,
-                        prefix: "videos",
-                      });
-
+                      const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, onProgress: setPct, prefix: "videos" });
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
-
-                      setEditing(ed => ({
-                        ...ed,
-                        videoMode: "url",
-                        video: { url: cdnUrl },
-                      }));
+                      setEditing(ed => ({ ...ed, videoMode: "url", video: { url: cdnUrl } }));
                       alert("Video uploaded ✔");
                     } catch (err) {
                       console.error(err);
                       alert(String(err?.message || "Video upload failed."));
                     } finally {
                       setUploadingVideo?.(false);
-                      e.target.value = ""; // allow re-pick
+                      e.target.value = "";
                     }
                   }}
                 />
@@ -433,8 +502,7 @@ export function MediaFieldset({
               </label>
               <label>Upload poster (optional)
                 <input
-                  type="file"
-                  accept="image/*"
+                  type="file" accept="image/*"
                   onChange={async (e) => {
                     const f = e.target.files?.[0]; if (!f) return;
                     try {
