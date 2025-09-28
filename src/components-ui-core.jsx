@@ -219,7 +219,7 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
               onExpand();
             }}
           >
-            See more
+            more
           </button>
         </div>
       )}

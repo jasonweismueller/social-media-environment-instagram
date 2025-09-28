@@ -615,12 +615,11 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
 
-/* Wrapper */
+
+/* Wrapper & clamp stay same */
 .text-wrap {
   position: relative;
 }
-
-/* Clamp to 2 lines */
 .text.clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -628,12 +627,12 @@ body.admin-mode .ig-topbar { display:none !important; }
   overflow: hidden;
 }
 
-/* Fade overlay + button */
+/* Fade tail */
 .fade-more {
   position: absolute;
   right: 0;
   bottom: 0;
-  height: 1.6em;             /* matches line height */
+  height: 1.6em;
   display: inline-flex;
   align-items: center;
   gap: .35ch;
@@ -651,14 +650,14 @@ body.admin-mode .ig-topbar { display:none !important; }
   background: linear-gradient(90deg, rgba(255,255,255,0), var(--card));
 }
 
-/* Ellipsis dots */
+/* Dots same */
 .dots {
   font: inherit;
   line-height: inherit;
   display: inline;
 }
 
-/* "See more" link */
+/* “more” link styled like Instagram */
 .see-more {
   background: none;
   border: none;
@@ -667,10 +666,11 @@ body.admin-mode .ig-topbar { display:none !important; }
   cursor: pointer;
   font: inherit;
   line-height: inherit;
-  color: #111827;      /* black */
-  font-weight: 600;    /* bold */
+  color: #6b7280;      /* grey like Insta */
+  font-weight: 400;    /* normal weight */
   text-decoration: none;
 }
 .see-more:hover {
   text-decoration: underline;
+  color: #4b5563;      /* darker grey on hover */
 }
