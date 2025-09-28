@@ -614,58 +614,11 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-avatar{ width:100%; height:100%; border-radius:999px; background:#e5e7eb; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
+
 /* IG caption clamp */
-.ig-caption-wrap{ position: relative; }
-.ig-caption{ margin: 0; white-space: pre-wrap; }
-.ig-caption.clamp{
-  display: -webkit-box;
-  -webkit-line-clamp: 2;           /* ← adjust lines as you like */
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-
-/* "more" link */
-/* before: color: var(--link, #2563eb); */
-.ig-more{
-  background:none;
-  border:0;
-  padding:0;
-  margin-left:.35ch;
-  color:#6b7280;          /* grey-500 */
-  font-weight:600;
-  font-size:.9rem;
-  cursor:pointer;
-}
-.ig-more:hover{ color:#4b5563; text-decoration:underline; }  /* grey-600 */
-
-/* optional fade tail (place button over the end) */
-.ig-caption-wrap .ig-more{
-  position: relative;
-}
-.ig-caption-wrap .ig-more::before{
-  content:"";
-  position:absolute;
-  right:100%;
-  top:0;
-  height:1.35em;
-  width:6ch;
-  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
-}
-
-/* Fade tail for clamped captions */
-.ig-caption-wrap.clamped::after{
-  content:"";
-  position:absolute;
-  right:0;
-  bottom:0;
-  width:40%;                /* how wide the fade is */
-  height:1.35em;            /* ≈ line-height of your caption */
-  background:linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
-  pointer-events:none;
-}
-
 .ig-caption {
+  margin: 0;
+  white-space: pre-wrap;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -673,16 +626,21 @@ body.admin-mode .ig-topbar { display:none !important; }
 }
 
 .ig-caption.clamp {
-  -webkit-line-clamp: 2; /* still 2 lines */
+  -webkit-line-clamp: 2; /* adjust lines as you like */
 }
 
+/* "more" link (inline style) */
 .ig-more.inline {
-  display:inline;
-  margin-left:4px;
-  color:#6b7280;
-  background:none;
-  border:none;
-  padding:0;
-  font:inherit;
-  cursor:pointer;
+  display: inline;
+  margin-left: 4px;
+  color: #6b7280;          /* grey-500 */
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.ig-more.inline:hover {
+  color: #4b5563;          /* grey-600 */
+  text-decoration: underline;
 }
