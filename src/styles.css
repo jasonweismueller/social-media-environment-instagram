@@ -614,48 +614,63 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-avatar{ width:100%; height:100%; border-radius:999px; background:#e5e7eb; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
-/* wrapper */
-.ig-caption-wrap { position: relative; }
 
-/* clamped caption */
-.ig-caption {
-  margin: 0;
-  white-space: pre-wrap;
+/* Wrapper */
+.text-wrap {
+  position: relative;
+}
+
+/* Clamp to 2 lines */
+.text.clamp {
   display: -webkit-box;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  position: relative;
-  padding-right: 3ch;        /* leave a small gap for the button */
 }
-.ig-caption.clamp { -webkit-line-clamp: 2; }
 
-/* fade tail */
-.ig-caption-wrap.clamped::after{
-  content:"";
-  position:absolute;
-  right: 2.5ch;
+/* Fade overlay + button */
+.fade-more {
+  position: absolute;
+  right: 0;
   bottom: 0;
-  width: 3ch;
-  height: 1.2em;             /* ≈ one line height */
-  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
-  pointer-events: none;
+  height: 1.6em;             /* matches line height */
+  display: inline-flex;
+  align-items: center;
+  gap: .35ch;
+  background: var(--card);
+  padding-left: .25ch;
   z-index: 1;
 }
-
-/* the “more” button aligned with baseline */
-.ig-more{
-  position:absolute;
-  right:1.5ch;
-  bottom:2;                  /* ← anchor to bottom instead of top/50% */
-  z-index:2;
-  display:inline;
-  background:none;
-  border:0;
-  padding:0;
-  margin:0;
-  color:#6b7280;             /* grey */
-  font-weight:600;
-  font-size:.9rem;
-  cursor:pointer;
+.fade-more::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 0;
+  width: 6ch;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card));
 }
-.ig-more:hover{ color:#4b5563; text-decoration:underline; }
+
+/* Ellipsis dots */
+.dots {
+  font: inherit;
+  line-height: inherit;
+  display: inline;
+}
+
+/* "See more" link */
+.see-more {
+  background: none;
+  border: none;
+  padding: 0;
+  display: inline;
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  color: #111827;      /* black */
+  font-weight: 600;    /* bold */
+  text-decoration: none;
+}
+.see-more:hover {
+  text-decoration: underline;
+}
