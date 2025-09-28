@@ -205,21 +205,25 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
   }, [text, expanded, onClamp]);
 
   return (
-    <span className="text-wrap">
-      <span ref={pRef} className={`text ${!expanded ? "clamp" : ""}`}>{text}</span>
+    <div className="text-wrap">
+      <p ref={pRef} className={`text ${!expanded ? "clamp" : ""}`}>{text}</p>
       {!expanded && needsClamp && (
-        <span className="fade-more">
+        <div className="fade-more">
           <span className="dots" aria-hidden="true">…</span>
           <button
             type="button"
             className="see-more"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onExpand?.(); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onExpand();
+            }}
           >
             more
           </button>
-        </span>
+        </div>
       )}
-    </span>
+    </div>
   );
 }
 
