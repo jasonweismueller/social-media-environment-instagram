@@ -625,16 +625,18 @@ body.admin-mode .ig-topbar { display:none !important; }
 }
 
 /* "more" link */
+/* before: color: var(--link, #2563eb); */
 .ig-more{
-  background: none;
-  border: 0;
-  padding: 0;
-  margin-left: .35ch;
-  color: var(--link, #2563eb);
-  font-weight: 600;
-  font-size: .9rem;
-  cursor: pointer;
+  background:none;
+  border:0;
+  padding:0;
+  margin-left:.35ch;
+  color:#6b7280;          /* grey-500 */
+  font-weight:600;
+  font-size:.9rem;
+  cursor:pointer;
 }
+.ig-more:hover{ color:#4b5563; text-decoration:underline; }  /* grey-600 */
 
 /* optional fade tail (place button over the end) */
 .ig-caption-wrap .ig-more{
@@ -648,4 +650,16 @@ body.admin-mode .ig-topbar { display:none !important; }
   height:1.35em;
   width:6ch;
   background: linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
+}
+
+/* Fade tail for clamped captions */
+.ig-caption-wrap.clamped::after{
+  content:"";
+  position:absolute;
+  right:0;
+  bottom:0;
+  width:40%;                /* how wide the fade is */
+  height:1.35em;            /* ≈ line-height of your caption */
+  background:linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
+  pointer-events:none;
 }
