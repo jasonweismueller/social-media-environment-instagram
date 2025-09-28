@@ -205,19 +205,19 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
   }, [text, expanded, onClamp]);
 
   return (
-    <div className="ig-caption-wrap">
-      <p ref={pRef} className={`ig-caption ${!expanded ? "clamp" : ""}`}>{text}</p>
-      {!expanded && needsClamp && (
-        <button
-          type="button"
-          className="ig-more"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onExpand?.(); }}
-        >
-          more
-        </button>
-      )}
-    </div>
-  );
+  <div className={`ig-caption-wrap ${!expanded && needsClamp ? "clamped" : ""}`}>
+    <p ref={pRef} className={`ig-caption ${!expanded ? "clamp" : ""}`}>{text}</p>
+    {!expanded && needsClamp && (
+      <button
+        type="button"
+        className="ig-more"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onExpand?.(); }}
+      >
+        more
+      </button>
+    )}
+  </div>
+);
 }
 
 /* -------------------------------- Modal ----------------------------------- */
