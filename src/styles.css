@@ -618,7 +618,7 @@ body.admin-mode .ig-topbar { display:none !important; }
 /* wrapper must be relative so we can place fade + button */
 .ig-caption-wrap { position: relative; }
 
-/* clamped caption: reserve space for the button on the right */
+/* clamped caption: reserve a small space on the right */
 .ig-caption {
   margin: 0;
   white-space: pre-wrap;
@@ -626,37 +626,38 @@ body.admin-mode .ig-topbar { display:none !important; }
   -webkit-box-orient: vertical;
   overflow: hidden;
   position: relative;
-  padding-right: 5.5ch;    /* ← space so text doesn't hide under the button */
+  padding-right: 3ch;             /* tighter gap so “more” sits closer */
 }
 .ig-caption.clamp { -webkit-line-clamp: 2; }
 
-/* fade tail, but stop it BEFORE the button */
+/* fade tail, stop it before the button so it’s always visible */
 .ig-caption-wrap.clamped::after{
   content:"";
   position:absolute;
-  right:5ch;               /* ← matches (padding-right - a bit) */
-  bottom:0;
-  width:6ch;               /* tail width */
-  height:1.35em;           /* ≈ line-height */
-  background:linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
-  pointer-events:none;
-  z-index:1;               /* behind the button */
+  right: 2.5ch;                   /* end fade just before the button */
+  top: 0;
+  bottom: 0;
+  width: 3ch;
+  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
+  pointer-events: none;
+  z-index: 1;                     /* behind the button */
 }
 
 /* the “more” button */
 .ig-more{
-  position:absolute;
-  right:0;
-  bottom:0;
-  z-index:2;               /* above fade */
-  display:inline;
-  background:none;
-  border:0;
-  padding:0;
-  margin:0;
-  color:#6b7280;           /* grey-500 */
-  font-weight:600;
-  font-size:.9rem;
-  cursor:pointer;
+  position: absolute;
+  right: 0.25ch;                  /* closer horizontally */
+  top: 50%;                       /* align with text baseline area */
+  transform: translateY(-50%);    /* perfect vertical centering */
+  z-index: 2;                     /* above fade */
+  display: inline;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: #6b7280;                 /* grey-500 */
+  font-weight: 600;
+  font-size: .9rem;
+  cursor: pointer;
 }
-.ig-more:hover{ color:#4b5563; text-decoration:underline; }
+.ig-more:hover{ color:#4b5563; text-decoration: underline; }
