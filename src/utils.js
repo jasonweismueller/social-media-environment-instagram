@@ -1562,10 +1562,6 @@ export const SIGNER_PATH =
   (window.CONFIG && window.CONFIG.SIGNER_PATH) ||
   "/default/presign-upload";
 
-function joinUrl(base, path) {
-  return `${String(base).replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
-}
-
 export function encodePathKeepSlashes(path) {
   return String(path).split("/").map(encodeURIComponent).join("/");
 }
