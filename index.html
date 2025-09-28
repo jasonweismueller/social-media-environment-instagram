@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <title>Social Media Environment</title>
     
-   <script>
+<script>
   window.CONFIG = {
-    /* === Google Apps Script proxy (API Gateway -> Lambda gas-proxy) === */
+    // GAS proxy (Lambda/API Gateway)
     GAS_PROXY_BASE: "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com",
     GAS_PROXY_PATH: "/default/gas",
 
-    /* (Optional) keep legacy code happy by pointing API_BASE at the proxy too */
+    // Convenience: some helpers use API_BASE directly
     API_BASE: "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com/default/gas",
 
-    /* === S3 upload presigner + CDN (you already had these) === */
+    // S3 presigner/CDN
     SIGNER_BASE: "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com",
     SIGNER_PATH: "/default/presign-upload",
     CF_BASE: "https://d2bihrgvtn9bga.cloudfront.net"
