@@ -620,17 +620,18 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       )}
 
       {/* Caption with IG PostText (see more logic) */}
-      {text?.trim() && (
-        <div style={{ padding: "6px 12px 0 12px", fontSize: 14, lineHeight: 1.4, color: "#111827" }}>
-          <span style={{ fontWeight: 600, marginRight: 6 }}>{author || "username"}</span>
-          <PostText
-            text={text}
-            expanded={expanded}
-            onExpand={() => setExpanded(true)}
-            onClamp={() => onAction("text_clamped", { id })}
-          />
-        </div>
-      )}
+      {/* Caption with IG PostText (inline username + text) */}
+{text?.trim() && (
+  <div className="ig-caption-row">
+    <span className="ig-username">{author || "username"}</span>{" "}
+    <PostText
+      text={text}
+      expanded={expanded}
+      onExpand={() => setExpanded(true)}
+      onClamp={() => onAction("text_clamped", { id })}
+    />
+  </div>
+)}
 
       {time && (
         <div style={{ padding: "6px 12px 12px 12px", fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".02em" }}>
