@@ -842,46 +842,85 @@ export async function loadPostsFromBackend(arg1, arg2) {
     return cached || [];
   }
 }
-
 /**
- * savePostsToBackend(posts, { feedId, name } = {})
+ * Validate, sanitize, and save posts to backend.
+ * savePostsToBackend(posts, { feedId, name, app } = {})
  */
-export async function savePostsToBackend(posts, ctx = {}) {
-  const { feedId = null, name = null, app = "ig" } = ctx || {};
+export async function savePostsToBackend(rawPosts, ctx = {}) {
+  const { feedId = null, name = null, app = (typeof APP !== "undefined" ? APP : "ig") } = ctx || {};
   const admin_token = getAdminToken();
   if (!admin_token) {
     console.warn("savePostsToBackend: missing admin_token");
     return false;
   }
 
+  // 1) Block any lingering data: URLs (these blow up payload size & CORS)
+  const offenders = [];
+  (rawPosts || []).forEach((p) => {
+    const id = p?.id || "(no id)";
+    if (p?.image?.url?.startsWith?.("data:")) offenders.push({ id, field: "image.url" });
+    if (p?.video?.url?.startsWith?.("data:")) offenders.push({ id, field: "video.url" });
+    if (p?.videoPosterUrl?.startsWith?.("data:")) offenders.push({ id, field: "videoPosterUrl" });
+  });
+  if (offenders.length) {
+    const lines = offenders.map(o => `• Post ${o.id}: ${o.field}`).join("\n");
+    alert(
+      "One or more posts still contain local data URLs.\n\n" +
+      "Please upload images/videos so they use https URLs, then try saving again.\n\n" +
+      lines
+    );
+    return false;
+  }
+
+  // 2) Sanitize (remove editor-only properties / reduce payload bloat)
+  const posts = (rawPosts || []).map((p) => {
+    const q = { ...p };
+    // remove any transient/admin preview bits if you have them
+    delete q._localMyCommentText;
+    delete q._tempUpload;
+    // Ensure only {url, alt, focalX, focalY} shape for images
+    if (q.image && q.image.svg && q.image.url) {
+      // Prefer URL if present; or drop svg if you never need to persist it
+      delete q.image.svg;
+    }
+    return q;
+  });
+
   try {
     const res = await fetch(GS_ENDPOINT, {
       method: "POST",
-      // mode: "cors",              // default; fine to omit
-      credentials: "include",       // if your backend is cookie/session based; remove if token-only
+      // IMPORTANT: no 'no-cors', no 'keepalive'
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "publish_posts",
-        app,                         // keep namespace explicit
+        app,
         posts,
         feed_id: feedId,
         name,
         admin_token,
       }),
-      keepalive: true,
     });
 
     if (!res.ok) {
-      // Try to read some body for debugging
-      const txt = await res.text().catch(() => "");
-      console.warn("savePostsToBackend: HTTP error", res.status, txt?.slice(0, 200));
+      const text = await res.text().catch(() => "");
+      console.warn("savePostsToBackend: HTTP error", res.status, text);
+      alert(`Save failed: HTTP ${res.status}${text ? ` — ${text}` : ""}`);
       return false;
     }
 
+    // Apps Script often returns JSON; try to parse but don’t require it
+    const out = await res.json().catch(() => null);
+    if (out && out.error) {
+      alert(`Save failed: ${out.error}`);
+      return false;
+    }
+
+    // success
     invalidatePostsCache(feedId);
     return true;
   } catch (err) {
     console.warn("Publish failed:", err);
+    alert(`Save failed: ${String(err?.message || err)}`);
     return false;
   }
 }
