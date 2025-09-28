@@ -112,7 +112,7 @@ actions{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
 .app-shell{transition:filter .2s ease,opacity .2s ease}
 .app-shell.blurred{filter:blur(6px);opacity:.85;pointer-events:none;user-select:none}
 
-/* “See more” clamp */
+/* “See more” clamp (global default) */
 .text-wrap{position:relative}
 .text.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .fade-more{position:absolute;right:0;bottom:0;height:1.6em;display:inline-flex;align-items:center;gap:.35ch;background:var(--card);padding-left:.25ch;z-index:1}
@@ -201,7 +201,14 @@ actions{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
   justify-content: center;
   padding-top: var(--feed-gap); /* single source of truth */
 }
-.page .container.feed{max-width: var(--feed-max) !important; width: 100% !important; padding: 0 !important; margin: 0 auto !important;}
+/* page feed container */
+.page .container.feed{
+  max-width: var(--feed-max) !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+}
+
 .page .feed > .card:first-child{margin-top:var(--feed-gap)}
 
 .rail{
@@ -210,7 +217,8 @@ actions{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
   overflow: hidden; pointer-events: none; user-select: none;
   filter: grayscale(1) blur(1px); opacity:.55; width:100%;
 }
-.rail > *:first-child{margin-top:0 !important}
+/* first child in rail */
+.rail > *:first-child{ margin-top:0 !important; }
 
 /* Skeleton UI */
 .ghost-card{background:#fff;border:1px solid var(--line);border-radius:1rem;box-shadow:var(--shadow);margin-bottom:12px}
@@ -615,130 +623,32 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
 
-
-/* Wrapper & clamp stay same */
-.text-wrap {
-  position: relative;
-}
-.text.clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Fade tail */
-.fade-more {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  height: 1.6em;
-  display: inline-flex;
-  align-items: center;
-  gap: .35ch;
-  background: var(--card);
-  padding-left: .25ch;
-  z-index: 1;
-}
-.fade-more::before {
-  content: "";
-  position: absolute;
-  right: 100%;
-  top: 0;
-  width: 6ch;
-  height: 100%;
-  background: linear-gradient(90deg, rgba(255,255,255,0), var(--card));
-}
-
-/* Dots same */
-.dots {
-  font: inherit;
-  line-height: inherit;
-  display: inline;
-}
-
-/* “more” link styled like Instagram */
-.see-more {
-  background: none;
-  border: none;
-  padding: 0;
-  display: inline;
-  cursor: pointer;
-  font: inherit;
-  line-height: inherit;
-  color: #6b7280;      /* grey like Insta */
-  font-weight: 400;    /* normal weight */
-  text-decoration: none;
-}
-.see-more:hover {
-  text-decoration: underline;
-  color: #4b5563;      /* darker grey on hover */
-}
+/* ---------------- IG Carousel ---------------- */
 .igcar-wrap{
   position:relative; width:100%; border-radius:8px; overflow:hidden; background:#000;
-  aspect-ratio: 1 / 1;                /* IG square; use 4 / 5 for portrait */
-  touch-action: pan-x;                 /* ← allow only horizontal gestures */
-  overscroll-behavior: contain;        /* ← keep parent from scrolling while swiping */
-  user-select: none;                   /* nicer dragging feel */
+  aspect-ratio: 1 / 1;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+  user-select: none;
 }
-
-.igcar-track{
-  display:flex; width:100%; height:100%;
-  transition: transform .22s ease-in-out;
-  will-change: transform;
-}
-
+.igcar-track{ display:flex; width:100%; height:100%; transition: transform .22s ease-in-out; will-change: transform; }
 .igcar-slide{ flex:0 0 100%; height:100%; position:relative; }
-.igcar-img{
-  position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-  -webkit-user-drag: none; user-drag: none;   /* prevent image drag ghost */
-}
-
-/* Arrows (desktop/tablet only) */
-.igcar-arrow{
-  position:absolute; top:50%; transform: translateY(-50%);
-  width:32px; height:32px; border-radius:999px; border:none;
-  background:rgba(0,0,0,.45); cursor:pointer; z-index:3;
-}
+.igcar-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; -webkit-user-drag: none; user-drag: none; }
+.igcar-arrow{ position:absolute; top:50%; transform: translateY(-50%); width:32px; height:32px; border-radius:999px; border:none; background:rgba(0,0,0,.45); cursor:pointer; z-index:3; }
 .igcar-arrow.left{ left:8px; }
 .igcar-arrow.right{ right:8px; }
 .igcar-arrow:hover{ background:rgba(0,0,0,.65); }
-
-/* Hide arrows on mobile — you'll swipe instead */
-@media (max-width:700px){
-  .igcar-arrow{ display:none !important; }
-}
-
-/* Dots/pips */
-.igcar-dots{
-  position:absolute; left:0; right:0; bottom:8px;
-  display:flex; gap:6px; justify-content:center; z-index:3;
-}
-.igcar-dots .dot{
-  width:6px; height:6px; border-radius:999px; border:0; padding:0;
-  background:rgba(255,255,255,.5); cursor:pointer;
-}
+@media (max-width:700px){ .igcar-arrow{ display:none !important; } }
+.igcar-dots{ position:absolute; left:0; right:0; bottom:8px; display:flex; gap:6px; justify-content:center; z-index:3; }
+.igcar-dots .dot{ width:6px; height:6px; border-radius:999px; border:0; padding:0; background:rgba(255,255,255,.5); cursor:pointer; }
 .igcar-dots .dot.on{ background:#fff; }
-
-/* count pill – hidden by default (desktop) */
 .igcar-count{
-  position:absolute; top:8px; right:8px;
-  padding:4px 8px; border-radius:999px;
-  font-size:12px; font-weight:600; line-height:1;
-  color:#fff; background:rgba(0,0,0,.55);
-  backdrop-filter: blur(2px);
-  box-shadow: 0 2px 10px rgba(0,0,0,.25);
-  z-index:3;
-  display:none;                /* shown on mobile via media query */
+  position:absolute; top:8px; right:8px; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:600; line-height:1;
+  color:#fff; background:rgba(0,0,0,.55); backdrop-filter: blur(2px); box-shadow: 0 2px 10px rgba(0,0,0,.25); z-index:3; display:none;
 }
+@media (max-width:700px){ .igcar-count{ display:inline-block; } }
 
-/* show pill on mobile; hide arrows there */
-@media (max-width:700px){
-  .igcar-count{ display:inline-block; }
-  .igcar-arrow{ display:none !important; }
-}
-
-/* IG caption */
+/* ================= IG caption (scoped) ================= */
 .ig-caption-row{
   padding: 6px 12px 0 12px;
   font-size:14px;
@@ -746,23 +656,57 @@ body.admin-mode .ig-topbar { display:none !important; }
   color:#111827;
 }
 
-.ig-username{ font-weight:600; }
+/* username stays inline */
+.ig-caption-row .ig-username{
+  display:inline;
+  font-weight:600;
+  white-space:nowrap;
+  margin-right:.5ch;
+}
 
-/* PostText internals */
-.ig-caption-row .text-wrap{ position:relative; }
-.ig-caption-row .text{ margin:0; white-space:pre-wrap; }
+/* PostText wrapper inline so it starts on same line as username */
+.ig-caption-row .text-wrap{
+  display:inline-block;           /* anchor for absolute fade */
+  position:relative;
+  vertical-align:baseline;
+  max-width:100%;
+}
+
+/* caption text itself */
+.ig-caption-row .text{
+  display:inline;
+  margin:0;
+  white-space:pre-wrap;
+}
+
+/* two-line clamp; leave room for the “more” pill so it doesn’t wrap on mobile */
 .ig-caption-row .text.clamp{
   display:-webkit-box;
   -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
   overflow:hidden;
+  padding-right:4.5ch;            /* space for … more */
 }
+
+/* fade tail + “more” button pinned to the end of the clamped line */
 .ig-caption-row .fade-more{
-  position:absolute; right:0; bottom:0; height:1.6em;
-  display:inline-flex; align-items:center; gap:.35ch;
-  background:var(--card); padding-left:.25ch; z-index:1;
+  position:absolute;
+  right:0;
+  bottom:0;
+  height:1.4em;                   /* match line-height */
+  display:inline-flex;
+  align-items:center;
+  gap:.35ch;
+  background:var(--card);
+  padding-left:.25ch;
+  z-index:1;
 }
 .ig-caption-row .fade-more::before{
-  content:""; position:absolute; right:100%; top:0; width:6ch; height:100%;
+  content:"";
+  position:absolute;
+  right:100%;
+  top:0;
+  width:5ch;
+  height:100%;
   background:linear-gradient(90deg, rgba(255,255,255,0), var(--card));
 }
