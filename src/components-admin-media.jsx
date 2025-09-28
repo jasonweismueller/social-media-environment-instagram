@@ -89,6 +89,7 @@ export function MediaFieldset({
                 />
               </label>
             )}
+
             {editing.imageMode === "upload" && (
               <label>Upload image
                 <input
@@ -97,25 +98,94 @@ export function MediaFieldset({
                   onChange={async (e) => {
                     const f = e.target.files?.[0];
                     if (!f) return;
-                    // Keep image uploads local (data URL) as before to avoid CORS complexity
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      setEditing((ed) => ({ ...ed, imageMode: "upload", image: { alt: "Image", url: reader.result } }));
-                    };
-                    reader.readAsDataURL(f);
+                    try {
+                      // Optional lightweight progress cue in the modal title
+                      const setPct = (pct) => {
+                        const el = document.querySelector(".modal h3, .section-title");
+                        if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
+                      };
+
+                      // Reuse the signer helper (same as videos/posters), but under an "images" prefix
+                      const { cdnUrl } = await uploadFileToS3ViaSigner({
+                        file: f,
+                        feedId,
+                        onProgress: setPct,
+                        prefix: "images",
+                      });
+
+                      // Restore title text
+                      const el = document.querySelector(".modal h3, .section-title");
+                      if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
+
+                      // Store as external URL (no base64) so publish is safe
+                      setEditing((ed) => ({
+                        ...ed,
+                        imageMode: "url",
+                        image: { alt: ed.image?.alt || "Image", url: cdnUrl },
+                      }));
+
+                      alert("Image uploaded ✔");
+                    } catch (err) {
+                      console.error(err);
+                      alert(String(err?.message || "Image upload failed."));
+                    } finally {
+                      // allow re-pick of the same file
+                      e.target.value = "";
+                    }
                   }}
                 />
               </label>
             )}
 
-            {(editing.imageMode === "upload" || editing.imageMode === "url") && editing.image?.url && (
-              <div className="img-preview" style={{ maxWidth:"100%", maxHeight:"min(40vh, 360px)", minHeight:120, overflow:"hidden", borderRadius:8, background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:8 }}>
-                <img src={editing.image.url} alt={editing.image.alt || ""} style={{ maxWidth:"100%", maxHeight:"100%", width:"auto", height:"auto", display:"block" }} />
+            {(editing.imageMode === "url") && editing.image?.url && (
+              <div
+                className="img-preview"
+                style={{
+                  maxWidth:"100%",
+                  maxHeight:"min(40vh, 360px)",
+                  minHeight:120,
+                  overflow:"hidden",
+                  borderRadius:8,
+                  background:"#f9fafb",
+                  display:"flex",
+                  alignItems:"center",
+                  justifyContent:"center",
+                  padding:8
+                }}
+              >
+                <img
+                  src={editing.image.url}
+                  alt={editing.image.alt || ""}
+                  style={{ maxWidth:"100%", maxHeight:"100%", width:"auto", height:"auto", display:"block" }}
+                />
               </div>
             )}
+
             {editing.imageMode === "random" && editing.image?.svg && (
-              <div className="img-preview" style={{ maxWidth:"100%", maxHeight:"min(40vh, 360px)", minHeight:120, overflow:"hidden", borderRadius:8, background:"#f9fafb", display:"flex", alignItems:"center", justifyContent:"center", padding:8 }}>
-                <div className="svg-wrap" dangerouslySetInnerHTML={{ __html: editing.image.svg.replace("<svg ", "<svg preserveAspectRatio='xMidYMid meet' style='display:block;max-width:100%;height:auto;max-height:100%' ") }} />
+              <div
+                className="img-preview"
+                style={{
+                  maxWidth:"100%",
+                  maxHeight:"min(40vh, 360px)",
+                  minHeight:120,
+                  overflow:"hidden",
+                  borderRadius:8,
+                  background:"#f9fafb",
+                  display:"flex",
+                  alignItems:"center",
+                  justifyContent:"center",
+                  padding:8
+                }}
+              >
+                <div
+                  className="svg-wrap"
+                  dangerouslySetInnerHTML={{
+                    __html: editing.image.svg.replace(
+                      "<svg ",
+                      "<svg preserveAspectRatio='xMidYMid meet' style='display:block;max-width:100%;height:auto;max-height:100%' "
+                    )
+                  }}
+                />
               </div>
             )}
           </>
@@ -171,14 +241,11 @@ export function MediaFieldset({
                     try {
                       setUploadingVideo?.(true);
 
-                      // UI progress hook that won't throw if header not present
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
 
-                      // FIX for “Failed to fetch”: rely on utils’ robust helper
-                      // (ensures correct presign URL, CORS mode, timeout, and better error surfacing)
                       const { cdnUrl } = await uploadFileToS3ViaSigner({
                         file: f,
                         feedId,

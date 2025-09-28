@@ -965,6 +965,48 @@ export async function uploadVideoToBackend(fileOrDataUrl, filename, mime = "vide
   return fileUrl;
 }
 
+export async function uploadImageToS3(file, { app = "ig" } = {}) {
+  const base = window.CONFIG?.API_BASE;
+  const admin = getAdminToken();
+  if (!base || !admin) throw new Error("Missing API_BASE or admin token");
+
+  // Ask backend to sign an upload. Your video flow likely uses a very similar route.
+  // Return shape A (PUT): { kind:"put", upload_url:"...", public_url:"...", headers:{...} }
+  // Return shape B (POST): { kind:"post", url:"...", fields:{...}, public_url:"..." }
+  const ext = (file.name?.split(".").pop() || "jpg").toLowerCase();
+  const mime = file.type || (ext === "png" ? "image/png" : "image/jpeg");
+  const signUrl =
+    `${base}?path=sign_upload&kind=image&ext=${encodeURIComponent(ext)}&app=${encodeURIComponent(app)}&admin_token=${encodeURIComponent(admin)}`;
+
+  const sigRes = await fetch(signUrl);
+  if (!sigRes.ok) throw new Error(`Sign failed: ${sigRes.status}`);
+  const sig = await sigRes.json();
+
+  if (sig.kind === "put") {
+    // Presigned PUT
+    const putRes = await fetch(sig.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": mime, ...(sig.headers || {}) },
+      body: file,
+    });
+    if (!putRes.ok) throw new Error(`Upload PUT failed: ${putRes.status}`);
+    return sig.public_url; // <- store this in your post.image.url
+  }
+
+  if (sig.kind === "post") {
+    // Presigned POST (multipart/form-data)
+    const form = new FormData();
+    Object.entries(sig.fields || {}).forEach(([k, v]) => form.append(k, v));
+    form.append("Content-Type", mime);
+    form.append("file", file);
+    const postRes = await fetch(sig.url, { method: "POST", body: form });
+    if (!postRes.ok) throw new Error(`Upload POST failed: ${postRes.status}`);
+    return sig.public_url;
+  }
+
+  throw new Error("Unknown signing response from backend");
+}
+
 /* --------------------------- Feed ID helper -------------------------------- */
 export function computeFeedId(posts = []) {
   const src = posts.map(p =>
