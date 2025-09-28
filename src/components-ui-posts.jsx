@@ -619,12 +619,10 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         </div>
       )}
 
-      {/* Caption with IG PostText (see more logic) */}
-      {/* Caption with IG PostText (inline username + text) */}
-{/* Caption (username + text on the same line) */}
-{ text?.trim() && (
-  <div className="ig-caption-row" style={{ padding: "6px 12px 0 12px" }}>
-    <span className="ig-username">{author || "username"}</span>&nbsp;
+{/* Caption with IG PostText (username floats for first line) */}
+{text?.trim() && (
+  <div className="ig-caption-row">
+    <span className="ig-username">{author || "username"}</span>
     <PostText
       text={text}
       expanded={expanded}
