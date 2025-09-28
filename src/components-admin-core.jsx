@@ -512,7 +512,7 @@ export function AdminDashboard({
       );
       if (!okGo) return;
 
-      const res = await deleteFeedOnBackend(f.feed_id); // no second arg now
+      const res = await deleteFeedOnBackend(f.feed_id, { app: APP });
       if (res.ok) {
         if (f.feed_id === feedId) {
           const next = feeds.filter((x) => x.feed_id !== f.feed_id);
@@ -571,7 +571,7 @@ export function AdminDashboard({
       );
       if (!okGo) return;
 
-      const ok = await wipeParticipantsOnBackend(feedId);
+      const ok = await wipeParticipantsOnBackend(feedId, { app: APP });
       if (ok) {
         setParticipantsRefreshKey((k) => k + 1);
         alert("Participants wiped.");

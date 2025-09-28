@@ -847,17 +847,22 @@ export async function loadPostsFromBackend(arg1, arg2) {
  * savePostsToBackend(posts, { feedId, name } = {})
  */
 export async function savePostsToBackend(posts, ctx = {}) {
-  const { feedId = null, name = null } = ctx || {};
+  const { feedId = null, name = null, app = "ig" } = ctx || {};
   const admin_token = getAdminToken();
-  if (!admin_token) { console.warn("savePostsToBackend: missing admin_token"); return false; }
+  if (!admin_token) {
+    console.warn("savePostsToBackend: missing admin_token");
+    return false;
+  }
+
   try {
-    await fetch(GS_ENDPOINT, {
+    const res = await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      // mode: "cors",              // default; fine to omit
+      credentials: "include",       // if your backend is cookie/session based; remove if token-only
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "publish_posts",
-        app: APP,
+        app,                         // keep namespace explicit
         posts,
         feed_id: feedId,
         name,
@@ -865,6 +870,14 @@ export async function savePostsToBackend(posts, ctx = {}) {
       }),
       keepalive: true,
     });
+
+    if (!res.ok) {
+      // Try to read some body for debugging
+      const txt = await res.text().catch(() => "");
+      console.warn("savePostsToBackend: HTTP error", res.status, txt?.slice(0, 200));
+      return false;
+    }
+
     invalidatePostsCache(feedId);
     return true;
   } catch (err) {
