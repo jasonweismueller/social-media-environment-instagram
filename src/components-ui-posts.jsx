@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils";
+import { useInViewAutoplay } from "./utils"; // ⬅️ removed tryEnterFullscreen/exitFullscreen here
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -96,9 +96,9 @@ function useStoriesCount() {
   useEffect(() => {
     const calc = () => {
       const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      const sidePad = 12;
-      const itemW = 72;
-      const gapMin = 10;
+      const sidePad = 12;      // px horizontal padding of the bar
+      const itemW   = 72;      // px card width
+      const gapMin  = 10;      // px minimum gap between items
       const usable = vw - sidePad * 2;
       const per = itemW + gapMin;
       const n = Math.max(1, Math.floor((usable + gapMin) / per));
@@ -526,9 +526,10 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
                     }}
                   >
                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      {/* muted icon */}
+                      {/* speaker */}
                       <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
-                      <path d="M15 11l5 5M20 12l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                      {/* moved X higher */}
+                      <path d="M15 7l5 5M20 8l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                   </button>
                 )}
@@ -774,6 +775,7 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
             margin: "1.5rem 0"
           }}
         >
+          {/* ⬇️ plain onSubmit; no fullscreen here */}
           <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
