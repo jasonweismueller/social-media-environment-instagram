@@ -622,9 +622,9 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       {/* Caption with IG PostText (see more logic) */}
       {/* Caption with IG PostText (inline username + text) */}
 {/* Caption (username + text on the same line) */}
-{text?.trim() && (
+{ text?.trim() && (
   <div className="ig-caption-row" style={{ padding: "6px 12px 0 12px" }}>
-    <span className="ig-username">{author || "username"}</span>{" "}
+    <span className="ig-username">{author || "username"}</span>&nbsp;
     <PostText
       text={text}
       expanded={expanded}
