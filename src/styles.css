@@ -614,3 +614,24 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-avatar{ width:100%; height:100%; border-radius:999px; background:#e5e7eb; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
+/* IG caption clamp */
+.ig-caption-wrap{ position: relative; }
+.ig-caption{ margin: 0; white-space: pre-wrap; }
+.ig-caption.clamp{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;           /* ← adjust lines as you like */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* "more" link */
+.ig-more{
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: .35ch;
+  color: var(--link, #2563eb);
+  font-weight: 600;
+  font-size: .9rem;
+  cursor: pointer;
+}
