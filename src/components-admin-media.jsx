@@ -1,6 +1,154 @@
 // components-admin-media.jsx
-import React from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { randomSVG, uploadFileToS3ViaSigner } from "./utils";
+
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+/**
+ * Square preview that lets you drag to set the image focal point (object-position).
+ * Stores values as percentages (0–100).
+ */
+function ImageCropper({
+  src,
+  alt = "",
+  focalX = 50,
+  focalY = 50,
+  onChange,
+  disabled = false,
+}) {
+  const wrapRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const onPointerMove = useCallback((e) => {
+    if (!dragging || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const clientX = "touches" in e ? (e.touches[0]?.clientX ?? 0) : e.clientX;
+    const clientY = "touches" in e ? (e.touches[0]?.clientY ?? 0) : e.clientY;
+    const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 0, 100);
+    const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 0, 100);
+    onChange?.({ focalX: Math.round(xPct), focalY: Math.round(yPct) });
+  }, [dragging, onChange]);
+
+  const startDrag = useCallback((e) => {
+    if (disabled) return;
+    setDragging(true);
+    onPointerMove(e);
+    e.preventDefault();
+  }, [disabled, onPointerMove]);
+
+  const stopDrag = useCallback(() => setDragging(false), []);
+
+  // Event listeners on document for smooth drag
+  React.useEffect(() => {
+    if (!dragging) return;
+    const move = (ev) => onPointerMove(ev);
+    const up = () => stopDrag();
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    document.addEventListener("touchmove", move, { passive: false });
+    document.addEventListener("touchend", up);
+    document.addEventListener("touchcancel", up);
+    return () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", up);
+      document.removeEventListener("touchcancel", up);
+    };
+  }, [dragging, onPointerMove, stopDrag]);
+
+  const objectPosition = useMemo(() => `${focalX}% ${focalY}%`, [focalX, focalY]);
+
+  return (
+    <div>
+      <div
+        ref={wrapRef}
+        style={{
+          width: "100%",
+          maxWidth: 560,
+          margin: "8px 0",
+          aspectRatio: "1 / 1",
+          position: "relative",
+          borderRadius: 8,
+          overflow: "hidden",
+          background: "#f3f4f6",
+          userSelect: "none",
+          cursor: disabled ? "default" : (dragging ? "grabbing" : "grab"),
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,.05)",
+        }}
+        onMouseDown={startDrag}
+        onTouchStart={startDrag}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt={alt}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition,
+              display: "block",
+            }}
+            draggable={false}
+          />
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#9ca3af" }}>
+            No image
+          </div>
+        )}
+
+        {/* Focal marker */}
+        {src && (
+          <div
+            style={{
+              position: "absolute",
+              left: `calc(${focalX}% - 8px)`,
+              top: `calc(${focalY}% - 8px)`,
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              border: "2px solid white",
+              background: "rgba(0,0,0,.35)",
+              boxShadow: "0 0 0 2px rgba(0,0,0,.15)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+      </div>
+
+      <div className="grid-2" style={{ gap: 12 }}>
+        <label>
+          X position
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={focalX}
+            onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY })}
+            disabled={disabled}
+          />
+        </label>
+        <label>
+          Y position
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={focalY}
+            onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value) })}
+            disabled={disabled}
+          />
+        </label>
+      </div>
+      <div className="subtle" style={{ marginTop: 4 }}>
+        Tip: drag inside the square to reposition; sliders fine-tune.
+      </div>
+    </div>
+  );
+}
 
 export function MediaFieldset({
   editing,
@@ -10,6 +158,10 @@ export function MediaFieldset({
   setUploadingVideo,
   setUploadingPoster,
 }) {
+  const imgUrl = editing.image?.url || "";
+  const focalX = Number(editing.image?.focalX ?? 50);
+  const focalY = Number(editing.image?.focalY ?? 50);
+
   return (
     <>
       <h4 className="section-title">Post Media</h4>
@@ -32,7 +184,7 @@ export function MediaFieldset({
                   video: null,
                   videoPosterUrl: "",
                   imageMode: (ed.imageMode === "none" ? "random" : ed.imageMode) || "random",
-                  image: ed.image || randomSVG("Image")
+                  image: ed.image || { ...randomSVG("Image"), focalX: 50, focalY: 50 }
                 }));
               } else if (type === "video") {
                 setEditing(ed => ({
@@ -51,7 +203,7 @@ export function MediaFieldset({
           </select>
         </label>
 
-        {/* Image controls */}
+        {/* IMAGE controls */}
         {editing.videoMode === "none" && editing.imageMode !== "none" && (
           <>
             <div className="grid-2">
@@ -63,7 +215,7 @@ export function MediaFieldset({
                     const m = e.target.value;
                     let image = editing.image;
                     if (m === "none") image = null;
-                    if (m === "random") image = randomSVG("Image");
+                    if (m === "random") image = { ...randomSVG("Image"), focalX: 50, focalY: 50 };
                     setEditing({ ...editing, imageMode: m, image });
                   }}
                 >
@@ -83,7 +235,13 @@ export function MediaFieldset({
                   onChange={(e) =>
                     setEditing({
                       ...editing,
-                      image: { ...(editing.image||{}), url: e.target.value, alt: (editing.image && editing.image.alt) || "Image" }
+                      image: {
+                        ...(editing.image||{}),
+                        url: e.target.value,
+                        alt: (editing.image && editing.image.alt) || "Image",
+                        focalX: editing.image?.focalX ?? 50,
+                        focalY: editing.image?.focalY ?? 50,
+                      }
                     })
                   }
                 />
@@ -99,13 +257,13 @@ export function MediaFieldset({
                     const f = e.target.files?.[0];
                     if (!f) return;
                     try {
-                      // Optional lightweight progress cue in the modal title
+                      // Show lightweight progress in the title
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
 
-                      // Reuse the signer helper (same as videos/posters), but under an "images" prefix
+                      // Upload via signer (same helper used for videos/posters)
                       const { cdnUrl } = await uploadFileToS3ViaSigner({
                         file: f,
                         feedId,
@@ -113,54 +271,44 @@ export function MediaFieldset({
                         prefix: "images",
                       });
 
-                      // Restore title text
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
 
-                      // Store as external URL (no base64) so publish is safe
+                      // Initialize focal point to center
                       setEditing((ed) => ({
                         ...ed,
                         imageMode: "url",
-                        image: { alt: ed.image?.alt || "Image", url: cdnUrl },
+                        image: { alt: "Image", url: cdnUrl, focalX: 50, focalY: 50 },
                       }));
-
                       alert("Image uploaded ✔");
                     } catch (err) {
                       console.error(err);
                       alert(String(err?.message || "Image upload failed."));
                     } finally {
-                      // allow re-pick of the same file
-                      e.target.value = "";
+                      e.target.value = ""; // allow re-pick
                     }
                   }}
                 />
               </label>
             )}
 
-            {(editing.imageMode === "url") && editing.image?.url && (
-              <div
-                className="img-preview"
-                style={{
-                  maxWidth:"100%",
-                  maxHeight:"min(40vh, 360px)",
-                  minHeight:120,
-                  overflow:"hidden",
-                  borderRadius:8,
-                  background:"#f9fafb",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center",
-                  padding:8
-                }}
-              >
-                <img
-                  src={editing.image.url}
-                  alt={editing.image.alt || ""}
-                  style={{ maxWidth:"100%", maxHeight:"100%", width:"auto", height:"auto", display:"block" }}
-                />
-              </div>
+            {/* Crop/position tool + preview (for URL mode) */}
+            {editing.imageMode !== "none" && imgUrl && (
+              <ImageCropper
+                src={imgUrl}
+                alt={editing.image?.alt || ""}
+                focalX={focalX}
+                focalY={focalY}
+                onChange={({ focalX: x, focalY: y }) =>
+                  setEditing((ed) => ({
+                    ...ed,
+                    image: { ...(ed.image || {}), focalX: x, focalY: y },
+                  }))
+                }
+              />
             )}
 
+            {/* Random SVG preview */}
             {editing.imageMode === "random" && editing.image?.svg && (
               <div
                 className="img-preview"
