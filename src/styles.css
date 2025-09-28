@@ -615,7 +615,10 @@ body.admin-mode .ig-topbar { display:none !important; }
   .ig-story-name{ width:48px; height:9px; border-radius:4px; background:#f0f2f5; }
 }
 
-/* IG caption clamp */
+/* wrapper must be relative so we can place fade + button */
+.ig-caption-wrap { position: relative; }
+
+/* clamped caption: reserve space for the button on the right */
 .ig-caption {
   margin: 0;
   white-space: pre-wrap;
@@ -623,24 +626,37 @@ body.admin-mode .ig-topbar { display:none !important; }
   -webkit-box-orient: vertical;
   overflow: hidden;
   position: relative;
+  padding-right: 5.5ch;    /* ← space so text doesn't hide under the button */
+}
+.ig-caption.clamp { -webkit-line-clamp: 2; }
+
+/* fade tail, but stop it BEFORE the button */
+.ig-caption-wrap.clamped::after{
+  content:"";
+  position:absolute;
+  right:5ch;               /* ← matches (padding-right - a bit) */
+  bottom:0;
+  width:6ch;               /* tail width */
+  height:1.35em;           /* ≈ line-height */
+  background:linear-gradient(90deg, rgba(255,255,255,0), var(--card, #fff));
+  pointer-events:none;
+  z-index:1;               /* behind the button */
 }
 
-.ig-caption.clamp {
-  -webkit-line-clamp: 2; /* adjust lines as you like */
+/* the “more” button */
+.ig-more{
+  position:absolute;
+  right:0;
+  bottom:0;
+  z-index:2;               /* above fade */
+  display:inline;
+  background:none;
+  border:0;
+  padding:0;
+  margin:0;
+  color:#6b7280;           /* grey-500 */
+  font-weight:600;
+  font-size:.9rem;
+  cursor:pointer;
 }
-
-/* "more" link (inline style) */
-.ig-more.inline {
-  display: inline;
-  margin-left: 4px;
-  color: #6b7280;          /* grey-500 */
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-}
-.ig-more.inline:hover {
-  color: #4b5563;          /* grey-600 */
-  text-decoration: underline;
-}
+.ig-more:hover{ color:#4b5563; text-decoration:underline; }
