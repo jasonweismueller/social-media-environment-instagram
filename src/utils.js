@@ -350,14 +350,27 @@ export function neutralAvatarDataUrl(seed = "") {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-/* --------------------- Backend config ------------------------------------- */
-export const GS_ENDPOINT =
-  "https://script.google.com/macros/s/AKfycbyMfkPHIax4dbL1TePsdRYRUXoaEIPrh9lW-9HmrvCROYzpNNx9xSOlzqWgKs29ab1OyQ/exec";
+/* --------------------- Backend config (via API Gateway proxy) ------------- */
+// If you set these in window.CONFIG they will override the defaults:
+export const GAS_PROXY_BASE =
+  (window.CONFIG && window.CONFIG.GAS_PROXY_BASE) ||
+  "https://qkbi313c2i.execute-api.us-west-1.amazonaws.com";
+
+export const GAS_PROXY_PATH =
+  (window.CONFIG && window.CONFIG.GAS_PROXY_PATH) ||
+  "/default/gas";
+
+// Final Apps Script endpoint (proxied through API Gateway -> Lambda)
+function joinUrl(base, path) {
+  return `${String(base).replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
+}
+
+export const GS_ENDPOINT = joinUrl(GAS_PROXY_BASE, GAS_PROXY_PATH);
 
 // NOTE: This token is ONLY for participant logging. Admin actions use admin_token from login.
 export const GS_TOKEN = "a38d92c1-48f9-4f2c-bc94-12c72b9f3427";
 
-/* IG-scoped GET URLs */
+/* IG-scoped GET URLs (same query strings, just against the proxy) */
 const FEEDS_GET_URL         = `${GS_ENDPOINT}?path=feeds&app=${APP}`;
 const DEFAULT_FEED_GET_URL  = `${GS_ENDPOINT}?path=default_feed&app=${APP}`;
 const POSTS_GET_URL         = `${GS_ENDPOINT}?path=posts&app=${APP}`;
@@ -511,8 +524,8 @@ export async function adminLogout() {
   try {
     await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "admin_logout", admin_token }),
       keepalive: true,
     });
@@ -524,14 +537,20 @@ export async function adminLogout() {
 export async function sendToSheet(header, row, events, feed_id) {
   if (!feed_id) { console.warn("sendToSheet: feed_id required"); return false; }
   const payload = { token: GS_TOKEN, action: "log_participant", app: APP, feed_id, header, row, events };
-  const blob = new Blob([JSON.stringify(payload)], { type: "text/plain;charset=UTF-8" });
 
   if (navigator.sendBeacon) {
+    const blob = new Blob([JSON.stringify(payload)], { type: "text/plain;charset=UTF-8" });
     return navigator.sendBeacon(GS_ENDPOINT, blob);
   }
   try {
-    await fetch(GS_ENDPOINT, { method: "POST", mode: "no-cors", body: blob, keepalive: true });
-    return true;
+    const res = await fetch(GS_ENDPOINT, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+    return res.ok;
   } catch (err) {
     console.warn("sendToSheet failed:", err);
     return false;
@@ -572,10 +591,10 @@ export async function setDefaultFeedOnBackend(feedId) {
   const admin_token = getAdminToken();
   if (!admin_token) { console.warn("setDefaultFeedOnBackend: missing admin_token"); return false; }
   try {
-    await fetch(GS_ENDPOINT, {
+    const res = await fetch(GS_ENDPOINT, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "set_default_feed",
         app: APP,
@@ -584,6 +603,8 @@ export async function setDefaultFeedOnBackend(feedId) {
       }),
       keepalive: true,
     });
+    if (!res.ok) return false;
+    // optional: await res.json().catch(()=>null);
     return true;
   } catch (e) {
     console.warn("setDefaultFeedOnBackend failed:", e);
