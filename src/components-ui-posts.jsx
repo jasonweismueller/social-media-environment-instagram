@@ -621,8 +621,9 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
 
       {/* Caption with IG PostText (see more logic) */}
       {/* Caption with IG PostText (inline username + text) */}
+{/* Caption (username + text on the same line) */}
 {text?.trim() && (
-  <div className="ig-caption-row">
+  <div className="ig-caption-row" style={{ padding: "6px 12px 0 12px" }}>
     <span className="ig-username">{author || "username"}</span>{" "}
     <PostText
       text={text}
@@ -632,7 +633,6 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
     />
   </div>
 )}
-
       {time && (
         <div style={{ padding: "6px 12px 12px 12px", fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".02em" }}>
           {time}
