@@ -622,8 +622,8 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
 {/* Caption with IG PostText (username floats for first line) */}
 {text?.trim() && (
   <div className="ig-caption-row">
-    <span className="ig-username">{author || "username"}</span>
     <PostText
+      prefix={<span className="ig-username">{author || "username"}</span>}
       text={text}
       expanded={expanded}
       onExpand={() => setExpanded(true)}

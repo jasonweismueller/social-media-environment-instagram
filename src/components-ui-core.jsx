@@ -178,7 +178,7 @@ export function SkeletonFeed() {
 }
 
 /* --------------------------- Caption clamping ------------------------------ */
-export function PostText({ text, expanded, onExpand, onClamp }) {
+export function PostText({ text, expanded, onExpand, onClamp, prefix }) {
   const pRef = React.useRef(null);
   const [needsClamp, setNeedsClamp] = React.useState(false);
   const sentClampRef = React.useRef(false);
@@ -186,7 +186,6 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
   React.useEffect(() => {
     const el = pRef.current;
     if (!el) return;
-
     const check = () => {
       const clamped = el.scrollHeight > el.clientHeight + 1;
       setNeedsClamp(clamped);
@@ -195,7 +194,6 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
         onClamp?.();
       }
     };
-
     requestAnimationFrame(check);
     const ro = new ResizeObserver(check);
     ro.observe(el);
@@ -206,7 +204,10 @@ export function PostText({ text, expanded, onExpand, onClamp }) {
 
   return (
     <span className="text-wrap">
-      <span ref={pRef} className={`text ${!expanded ? "clamp" : ""}`}>{text}</span>
+      <span ref={pRef} className={`text ${!expanded ? "clamp" : ""}`}>
+        {prefix ? <>{prefix}&nbsp;</> : null}
+        {text}
+      </span>
       {!expanded && needsClamp && (
         <span className="fade-more">
           <span className="dots" aria-hidden="true">…</span>
