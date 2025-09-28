@@ -484,12 +484,21 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
               />
             ) : image?.url ? (
               <img
-                src={image.url}
-                alt={image.alt || ""}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                loading="lazy"
-                decoding="async"
-              />
+  src={image.url}
+  alt={image.alt || ""}
+  style={{
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    // NEW: honor focal point
+    objectPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
+  }}
+  loading="lazy"
+  decoding="async"
+/>
             ) : null}
           </div>
         </div>
