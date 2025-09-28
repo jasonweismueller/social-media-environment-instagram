@@ -1,8 +1,8 @@
 // components-ui-posts.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
-import { Modal, neutralAvatarDataUrl } from "./components-ui-core";
-import { useInViewAutoplay } from "./utils"; // ⬅️ removed tryEnterFullscreen/exitFullscreen here
+import { Modal, neutralAvatarDataUrl, PostText } from "./components-ui-core";
+import { useInViewAutoplay } from "./utils";
 
 /* ---------------- Small utils ---------------- */
 function useIsMobile(breakpointPx = 640) {
@@ -86,7 +86,6 @@ function DotsIcon(props) {
 }
 
 /* ---------------- Helpers ---------------- */
-const clampText = (t = "", max = 180) => (t.length > max ? t.slice(0, max).trim() + "…" : t);
 const sumReactions = (rx) => (rx ? Object.values(rx).reduce((a, b) => a + (Number(b) || 0), 0) : 0);
 
 /* ---------------- Mobile “Stories” ghost bar (non-sticky, no scroll) ---- */
@@ -314,6 +313,9 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const [saved, setSaved] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
+  // caption expand state
+  const [expanded, setExpanded] = useState(false);
+
   const [menuOpenMobile, setMenuOpenMobile] = useState(false);
   const [menuOpenDesktop, setMenuOpenDesktop] = useState(false);
   const dotsBtnRef = useRef(null);
@@ -334,33 +336,8 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
   const hasImage = imageMode && imageMode !== "none" && !!image;
   const refFromTracker = typeof registerViewRef === "function" ? registerViewRef(id) : undefined;
 
-  // Autoplay in view; start muted; allow unmute on gesture.
+  // Autoplay in view (keeps native controls)
   const videoRef = useInViewAutoplay(0.6, { startMuted: true, unmuteOnFirstGesture: true });
-
-  // Mobile: only show native controls after first tap.
-  const [showControlsMobile, setShowControlsMobile] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onVol = () => setIsMuted(!!v.muted);
-    onVol();
-    v.addEventListener("volumechange", onVol);
-    return () => v.removeEventListener("volumechange", onVol);
-  }, [videoRef]);
-
-  const revealControlsOnMobile = () => {
-    if (isMobile && !showControlsMobile) setShowControlsMobile(true);
-  };
-  const toggleMute = (e) => {
-    e.stopPropagation();
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setIsMuted(v.muted);
-    if (!v.paused) v.play().catch(() => {});
-  };
 
   const toggleLike = () => {
     if (disabled) return;
@@ -478,62 +455,24 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
       {/* Media */}
       {(hasImage || hasVideo) && (
         <div className="insta-media" style={{ position: "relative", background: "#000" }}>
-          <div
-            style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}
-            onClick={revealControlsOnMobile}
-            onTouchStart={revealControlsOnMobile}
-          >
+          <div style={{ width: "100%", aspectRatio: hasVideo ? "4 / 5" : "1 / 1", maxHeight: "80vh", position: "relative", overflow: "hidden" }}>
             {hasVideo ? (
-              <>
-                <video
-                  ref={videoRef}
-                  data-ig-video="1"
-                  src={video?.url || video}
-                  poster={videoPosterUrl || undefined}
-                  controls={!isMobile || showControlsMobile}
-                  playsInline
-                  muted
-                  autoPlay
-                  loop
-                  preload="auto"
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  onPlay={handlePlay}
-                  onPause={() => onAction("video_pause", { id })}
-                  onEnded={() => onAction("video_ended", { id })}
-                />
-
-                {/* Mobile-only mute pill; icon-only; hide if controls are visible or video isn't muted */}
-                {isMobile && !showControlsMobile && isMuted && (
-                  <button
-                    type="button"
-                    aria-label="Unmute video"
-                    onClick={toggleMute}
-                    style={{
-                      position: "absolute",
-                      right: 8,
-                      top: 8,         // away from native controls area
-                      zIndex: 5,
-                      background: "rgba(0,0,0,.55)",
-                      color: "#fff",
-                      border: 0,
-                      borderRadius: 999,
-                      padding: 8,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      lineHeight: 0,
-                      backdropFilter: "blur(2px)"
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                      {/* speaker */}
-                      <path d="M4 10v4h4l5 4V6l-5 4H4z" fill="currentColor" />
-                      {/* moved X higher */}
-                      <path d="M15 7l5 5M20 8l-5 5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                )}
-              </>
+              <video
+                ref={videoRef}
+                data-ig-video="1"
+                src={video?.url || video}
+                poster={videoPosterUrl || undefined}
+                controls
+                playsInline
+                muted
+                autoPlay
+                loop
+                preload="auto"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                onPlay={handlePlay}
+                onPause={() => onAction("video_pause", { id })}
+                onEnded={() => onAction("video_ended", { id })}
+              />
             ) : image?.svg ? (
               <div
                 dangerouslySetInnerHTML={{
@@ -628,17 +567,23 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
         </button>
       </div>
 
-      {/* Desktop-only likes label with word “likes” */}
+      {/* Desktop-only likes label with the word “likes” */}
       {!isMobile && likes > 0 && (
         <div style={{ padding: "0 12px 6px 12px", fontWeight: 600 }}>
           {likes.toLocaleString()} likes
         </div>
       )}
 
+      {/* Caption with IG PostText (see more logic) */}
       {text?.trim() && (
         <div style={{ padding: "6px 12px 0 12px", fontSize: 14, lineHeight: 1.4, color: "#111827" }}>
           <span style={{ fontWeight: 600, marginRight: 6 }}>{author || "username"}</span>
-          <span>{clampText(text, 180)}</span>
+          <PostText
+            text={text}
+            expanded={expanded}
+            onExpand={() => setExpanded(true)}
+            onClamp={() => onAction("text_clamped", { id })}
+          />
         </div>
       )}
 
@@ -775,7 +720,6 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
             margin: "1.5rem 0"
           }}
         >
-          {/* ⬇️ plain onSubmit; no fullscreen here */}
           <button type="button" className="btn primary" onClick={onSubmit} disabled={disabled === true}>
             Submit
           </button>
