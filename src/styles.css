@@ -738,60 +738,37 @@ body.admin-mode .ig-topbar { display:none !important; }
   .igcar-arrow{ display:none !important; }
 }
 
-
-/* keep username + caption on one line initially */
-.ig-caption-row .text-wrap{
-  display:inline-block;
-  vertical-align:baseline;
-  max-width:100%;
-  position:relative; /* keep fade-more positioned */
-}
-.ig-caption-row .text{
-  display:inline;
-  margin:0;            /* override the global .text margin */
-  white-space:pre-wrap;
-}
-
-
-
-.ig-username {
-  font-weight: 600;
-  display: inline;      /* keep it on same line */
-}
-
-/* ensure PostText sits inline with username */
-.ig-caption-wrap { display: inline; position: relative; }
-.ig-caption { margin: 0; white-space: pre-wrap; }
-.ig-caption.clamp{
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* IG caption: keep username + text on one line, but clamp still works */
+/* IG caption: username + text inline, with 2-line clamp and fade */
 .ig-caption-row { font-size:14px; line-height:1.4; color:#111827; }
-.ig-caption-row .ig-username { font-weight:600; display:inline; }
 
-/* Make PostText inline only here */
-.ig-caption-row .text-wrap { 
-  display:inline;                 /* inline to stay with username */
-  position:relative; 
-  max-width:100%;
+.ig-caption-row .ig-username {
+  font-weight:600;
+  display:inline;                 /* keep username inline */
 }
+
+.ig-caption-row .text-wrap {
+  display:inline;                 /* keep caption inline with username */
+  position:relative;              /* anchors the fade-more pill */
+  max-width:100%;
+  vertical-align:baseline;
+}
+
 .ig-caption-row .text {
-  display:inline;                 /* inline paragraph */
-  margin:0;                       /* kill default block margins */
+  display:inline;                 /* paragraph behaves like inline text */
+  margin:0;                       /* override global .text margin */
   white-space:pre-wrap;
 }
 
-/* Keep your existing clamp/fade-more working */
+/* clamped state (2 lines) still works while staying inline */
 .ig-caption-row .text.clamp{
   display:-webkit-box;
   -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
   overflow:hidden;
+  vertical-align:baseline;
 }
+
+/* fade “... more” tail */
 .ig-caption-row .fade-more{
   position:absolute; right:0; bottom:0; height:1.6em;
   display:inline-flex; align-items:center; gap:.35ch;
@@ -800,19 +777,4 @@ body.admin-mode .ig-topbar { display:none !important; }
 .ig-caption-row .fade-more::before{
   content:""; position:absolute; right:100%; top:0; width:6ch; height:100%;
   background:linear-gradient(90deg, rgba(255,255,255,0), var(--card));
-}
-
-
-.ig-caption-row .text-wrap {
-  display: inline;       /* instead of block */
-}
-
-.ig-caption-row .text.clamp {
-  display: -webkit-box;  /* keep line clamping */
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-
-  /* important: keep inline flow */
-  vertical-align: baseline;
 }
