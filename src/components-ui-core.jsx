@@ -204,10 +204,7 @@ export function PostText({ text, expanded, onExpand, onClamp, prefix }) {
 
   return (
     <span className="text-wrap">
-      <span ref={pRef} className={`text ${!expanded ? "clamp" : ""}`}>
-        {prefix ? <>{prefix}&nbsp;</> : null}
-        {text}
-      </span>
+      <span ref={pRef} className={`text ${(!expanded && needsClamp) ? "clamp" : ""}`}>{text}</span>
       {!expanded && needsClamp && (
         <span className="fade-more">
           <span className="dots" aria-hidden="true">…</span>
