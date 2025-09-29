@@ -649,13 +649,14 @@ body.admin-mode .ig-topbar { display:none !important; }
 @media (max-width:700px){ .igcar-count{ display:inline-block; } }
 
 
-/* ===== IG caption: inline with username, clamp only when needed ===== */
+/* ===== IG caption: inline with username, clamp only when truly overflowing ===== */
 .ig-caption-row{
   padding: 6px 12px 0 12px;
   font-size:14px;
   line-height:1.4;
   color:#111827;
 }
+
 .ig-caption-row .ig-username{
   display:inline;
   font-weight:600;
@@ -663,9 +664,9 @@ body.admin-mode .ig-topbar { display:none !important; }
   margin-right:.5ch;
 }
 
-/* PostText wrapper must be inline so its right edge is near the last characters */
+/* PostText wrapper stays inline so its right edge hugs the last characters */
 .ig-caption-row .text-wrap{
-  display:inline;                 /* <<< back to inline */
+  display:inline;
   position:relative;              /* anchor for fade-more */
   vertical-align:baseline;
   max-width:100%;
@@ -678,22 +679,24 @@ body.admin-mode .ig-topbar { display:none !important; }
   white-space:pre-wrap;
 }
 
-/* Clamp (only applied now when needsClamp===true) */
+/* INLINE clamp (so it can start on same line as username) */
 .ig-caption-row .text.clamp{
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
+  display:inline;
   overflow:hidden;
-
-  /* Small reserve so the "more" cluster doesn't overlap letters.
-     Because .clamp is only applied when needed, there won't be a blank gap. */
-  padding-right:2.75ch;
+  /* clamp to 2 lines based on the row's line-height */
+  max-height: calc(1.4em * 2);
+  vertical-align:baseline;
 }
 
-/* Fade + "more" pinned right at the end of the line, not way off to the edge */
+/* Only add the reserve space when overflow is REAL */
+.ig-caption-row .text.clamp.needs{
+  padding-right: 2.75ch;
+}
+
+/* Fade + "more" cluster sits snug to the end of the inline wrapper */
 .ig-caption-row .fade-more{
   position:absolute;
-  right:0;                        /* aligns to the end of the inline wrapper */
+  right:0;
   bottom:0;
   height:1.4em;
   display:inline-flex;
@@ -708,15 +711,15 @@ body.admin-mode .ig-topbar { display:none !important; }
   position:absolute;
   right:100%;
   top:0;
-  width:4.5ch;                    /* short gradient so it sits close to the text */
+  width:4.5ch;
   height:100%;
   background:linear-gradient(90deg, rgba(255,255,255,0), var(--card));
 }
 
-/* Avoid duplicate ellipsis look */
+/* Avoid duplicate ellipsis look if your component also renders dots */
 .ig-caption-row .fade-more .dots{ display:none !important; }
 
-/* Mobile polish (slightly more pad so "more" doesn't wrap) */
+/* Mobile: slightly more pad so "more" never wraps */
 @media (max-width:700px){
-  .ig-caption-row .text.clamp{ padding-right:3.25ch; }
+  .ig-caption-row .text.clamp.needs{ padding-right:3.25ch; }
 }

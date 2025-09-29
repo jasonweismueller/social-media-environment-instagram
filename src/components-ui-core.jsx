@@ -203,21 +203,29 @@ export function PostText({ text, expanded, onExpand, onClamp, prefix }) {
   }, [text, expanded, onClamp]);
 
   return (
-    <span className="text-wrap">
-      <span ref={pRef} className={`text ${(!expanded && needsClamp) ? "clamp" : ""}`}>{text}</span>
-      {!expanded && needsClamp && (
-        <span className="fade-more">
-          <span className="dots" aria-hidden="true">…</span>
-          <button
-            type="button"
-            className="see-more"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onExpand?.(); }}
-          >
-            more
-          </button>
-        </span>
-      )}
+    // Only change is the className: always "clamp" while !expanded,
+// and add "needs" only if we detected overflow.
+<span className="text-wrap">
+  <span
+    ref={pRef}
+    className={`text ${!expanded ? "clamp" : ""} ${needsClamp ? "needs" : ""}`}
+  >
+    {text}
+  </span>
+
+  {!expanded && needsClamp && (
+    <span className="fade-more">
+      <span className="dots" aria-hidden="true">…</span>
+      <button
+        type="button"
+        className="see-more"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onExpand?.(); }}
+      >
+        more
+      </button>
     </span>
+  )}
+</span>
   );
 }
 
