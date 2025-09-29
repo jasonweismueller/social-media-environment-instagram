@@ -649,15 +649,13 @@ body.admin-mode .ig-topbar { display:none !important; }
 @media (max-width:700px){ .igcar-count{ display:inline-block; } }
 
 
-/* ================= IG caption (clean + mobile-safe) ================= */
+/* ===== IG caption: inline with username, clamp only when needed ===== */
 .ig-caption-row{
   padding: 6px 12px 0 12px;
   font-size:14px;
   line-height:1.4;
   color:#111827;
 }
-
-/* username stays inline on the first line */
 .ig-caption-row .ig-username{
   display:inline;
   font-weight:600;
@@ -665,36 +663,39 @@ body.admin-mode .ig-topbar { display:none !important; }
   margin-right:.5ch;
 }
 
-/* PostText wrapper inline so it starts on same line as username */
+/* PostText wrapper must be inline so its right edge is near the last characters */
 .ig-caption-row .text-wrap{
-  display:inline-block;           /* anchor for absolute fade + button */
-  position:relative;
+  display:inline;                 /* <<< back to inline */
+  position:relative;              /* anchor for fade-more */
   vertical-align:baseline;
   max-width:100%;
 }
 
-/* caption text itself */
+/* Caption text */
 .ig-caption-row .text{
   display:inline;
   margin:0;
   white-space:pre-wrap;
 }
 
-/* two-line clamp; keep room for the "more" button so it doesn't wrap */
+/* Clamp (only applied now when needsClamp===true) */
 .ig-caption-row .text.clamp{
   display:-webkit-box;
   -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
   overflow:hidden;
-  padding-right:4.5ch;            /* space for "more" */
+
+  /* Small reserve so the "more" cluster doesn't overlap letters.
+     Because .clamp is only applied when needed, there won't be a blank gap. */
+  padding-right:2.75ch;
 }
 
-/* fade tail + "more" button pinned to the end of the clamped line */
+/* Fade + "more" pinned right at the end of the line, not way off to the edge */
 .ig-caption-row .fade-more{
   position:absolute;
-  right:0;
+  right:0;                        /* aligns to the end of the inline wrapper */
   bottom:0;
-  height:1.4em;                   /* match line-height */
+  height:1.4em;
   display:inline-flex;
   align-items:center;
   gap:.35ch;
@@ -707,25 +708,15 @@ body.admin-mode .ig-topbar { display:none !important; }
   position:absolute;
   right:100%;
   top:0;
-  width:5ch;
+  width:4.5ch;                    /* short gradient so it sits close to the text */
   height:100%;
   background:linear-gradient(90deg, rgba(255,255,255,0), var(--card));
 }
 
-/* REMOVE extra ellipsis glyph to avoid duplicates */
-.ig-caption-row .fade-more .dots{
-  display:none !important;        /* rely on fade + "more" only */
-}
+/* Avoid duplicate ellipsis look */
+.ig-caption-row .fade-more .dots{ display:none !important; }
 
-/* make sure the tiny "… more" cluster doesn’t misalign on mobile */
+/* Mobile polish (slightly more pad so "more" doesn't wrap) */
 @media (max-width:700px){
-  .ig-caption-row .text.clamp{ padding-right:5.25ch; }
-  .ig-caption-row .fade-more{ height:1.45em; }
-}
-
-/* prevent global .dots button styles from affecting caption ellipsis */
-.ig-caption-row .fade-more .dots:hover{
-  background:transparent !important;
-  border-radius:0 !important;
-  padding:0 !important;
+  .ig-caption-row .text.clamp{ padding-right:3.25ch; }
 }
