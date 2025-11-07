@@ -295,11 +295,29 @@ function DesktopMenu({ anchorEl, open, onClose, onPick, id }) {
 }
 
 /* ---------------- PostCard (IG) ---------------- */
-export function PostCard({ post, onAction = () => {}, disabled = false, registerViewRef }) {
+export function PostCard({
+  post,
+  onAction = () => {},
+  disabled = false,
+  registerViewRef,
+  app,
+  projectId,
+  feedId,
+  runSeed
+}) {
   const {
     id, author = "", avatarUrl = "", text = "", image, imageMode, video, videoMode,
     videoPosterUrl, reactions, metrics, time,
   } = post || {};
+
+  // Deterministic seed for consistent randomization across sessions
+const seedParts = [
+  runSeed || "run",
+  app || "ig",
+  projectId || "global",
+  feedId || "",
+  String(id ?? "")
+];
 
   const images = Array.isArray(post?.images) ? post.images : [];
   const hasCarousel = imageMode === "multi" && images.length > 1;
@@ -703,7 +721,7 @@ export function PostCard({ post, onAction = () => {}, disabled = false, register
 }
 
 /* ---------------- Feed (IG) ---------------- */
-export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
+export function Feed({ posts, registerViewRef, disabled, log, onSubmit, app, projectId, feedId, runSeed }) {
   const STEP = 6;
   const FIRST = Math.min(8, posts.length || 0);
   const [visibleCount, setVisibleCount] = useState(FIRST);
@@ -736,7 +754,17 @@ export function Feed({ posts, registerViewRef, disabled, log, onSubmit }) {
 
       <main className="insta-feed">
         {renderPosts.map((p) => (
-          <PostCard key={p.id} post={p} onAction={log} disabled={disabled} registerViewRef={registerViewRef} />
+          <PostCard
+  key={p.id}
+  post={p}
+  onAction={log}
+  disabled={disabled}
+  registerViewRef={registerViewRef}
+  app={app}
+  projectId={projectId}
+  feedId={feedId}
+  runSeed={runSeed}
+/>
         ))}
         <div ref={sentinelRef} aria-hidden="true" />
 
