@@ -1,147 +1,133 @@
-// components-ui-ig-carousel.jsx
+// /instagram/components-ui-ig-carousel.jsx
 import React from "react";
+import { IconVolume, IconVolumeMute } from "./components-ui-core";
 
-export function IGCarousel({ items = [] }) {
-  const [idx, setIdx] = React.useState(0);
-  const wrap = React.useRef(null);
-  const hasMany = items.length > 1;
+/**
+ * Instagram-style carousel:
+ * - Square visual footprint by default
+ * - Arrows on hover/active
+ * - Dots beneath
+ * - Supports images and videos (auto-pause when slide not active)
+ */
+export default function IGCarousel({
+  items = [],                 // [{type:"image"|"video", src, thumb?, alt?, poster?}]
+  active = 0,
+  onChange = () => {},
+  aspect = 1,                 // IG square = 1
+  showDots = true,
+  enableVideoControls = true,
+}) {
+  const [index, setIndex] = React.useState(active);
+  const wrapRef = React.useRef(null);
+  const videosRef = React.useRef({}); // index → HTMLVideoElement
+  const [muted, setMuted] = React.useState(true);
 
-  // Swipe (with axis-lock)
+  React.useEffect(() => { setIndex(active); }, [active]);
+
   React.useEffect(() => {
-    const el = wrap.current; 
-    if (!el) return;
+    // pause all non-active videos; play active if visible
+    Object.entries(videosRef.current).forEach(([i, el]) => {
+      if (!el) return;
+      if (Number(i) === index) { /* don't autoplay here; outer logic handles */ }
+      else { try { el.pause(); } catch {} }
+    });
+  }, [index]);
 
-    const state = { startX: 0, startY: 0, dx: 0, dy: 0, swiping: false, locked: null };
-    const THRESH = 6;  // px to decide x vs y
-    const SNAP = 40;   // px to change slide
+  function goto(i){
+    const next = (i + items.length) % items.length;
+    setIndex(next);
+    onChange(next);
+  }
 
-    const onStart = (x, y) => {
-      state.startX = x;
-      state.startY = y;
-      state.dx = 0;
-      state.dy = 0;
-      state.swiping = true;
-      state.locked = null;
-    };
+  function setVideoRef(i, el){
+    if (!el) return; videosRef.current[i] = el;
+    el.muted = !!muted;
+  }
 
-    const onMove = (x, y, e) => {
-      if (!state.swiping) return;
-      state.dx = x - state.startX;
-      state.dy = y - state.startY;
-
-      if (!state.locked) {
-        if (Math.abs(state.dx) > THRESH || Math.abs(state.dy) > THRESH) {
-          state.locked = Math.abs(state.dx) > Math.abs(state.dy) ? "x" : "y";
-        }
-      }
-      // If we locked horizontal, stop vertical page scroll
-      if (state.locked === "x" && e?.preventDefault) e.preventDefault();
-    };
-
-    const onEnd = () => {
-      if (!state.swiping) return;
-      state.swiping = false;
-
-      if (Math.abs(state.dx) > SNAP) {
-        const dir = state.dx < 0 ? 1 : -1;
-        setIdx(i => Math.min(items.length - 1, Math.max(0, i + dir)));
-      }
-    };
-
-    // Touch
-    const touchStart = (e) => {
-      const t = e.touches[0];
-      onStart(t.clientX, t.clientY);
-    };
-    const touchMove  = (e) => {
-      const t = e.touches[0];
-      onMove(t.clientX, t.clientY, e); // e.preventDefault when locked='x'
-    };
-    const touchEnd   = () => onEnd();
-
-    // Mouse
-    const mouseDown  = (e) => { onStart(e.clientX, e.clientY); e.preventDefault(); };
-    const mouseMove  = (e) => onMove(e.clientX, e.clientY);
-    const mouseUp    = () => onEnd();
-    const mouseLeave = () => onEnd();
-
-    el.addEventListener("touchstart", touchStart, { passive: true });
-    // IMPORTANT: passive:false so preventDefault works on iOS
-    el.addEventListener("touchmove",  touchMove,  { passive: false });
-    el.addEventListener("touchend",   touchEnd);
-    el.addEventListener("touchcancel",touchEnd);
-
-    el.addEventListener("mousedown",  mouseDown);
-    window.addEventListener("mousemove", mouseMove);
-    window.addEventListener("mouseup",   mouseUp);
-    el.addEventListener("mouseleave", mouseLeave);
-
-    return () => {
-      el.removeEventListener("touchstart", touchStart);
-      el.removeEventListener("touchmove",  touchMove);
-      el.removeEventListener("touchend",   touchEnd);
-      el.removeEventListener("touchcancel",touchEnd);
-
-      el.removeEventListener("mousedown",  mouseDown);
-      window.removeEventListener("mousemove", mouseMove);
-      window.removeEventListener("mouseup",   mouseUp);
-      el.removeEventListener("mouseleave", mouseLeave);
-    };
-  }, [items.length]);
-
-  // Keyboard
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "ArrowLeft")  setIdx(i => Math.max(0, i - 1));
-      if (e.key === "ArrowRight") setIdx(i => Math.min(items.length - 1, i + 1));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [items.length]);
+  function toggleMute(){
+    const nm = !muted; setMuted(nm);
+    Object.values(videosRef.current).forEach(v => { if (v) v.muted = nm; });
+  }
 
   return (
-    <div
-      className="igcar-wrap"
-      ref={wrap}
-      aria-roledescription="carousel"
-      // helps browsers understand gesture direction
-      style={{ touchAction: "pan-x", overscrollBehavior: "contain" }}
-    >
-      <div className="igcar-track" style={{ transform:`translateX(-${idx * 100}%)` }}>
-        {items.map((it, i) => (
-          <div className="igcar-slide" key={i} aria-hidden={i !== idx}>
+    <div className="video-wrap" ref={wrapRef} style={{ aspectRatio: `${aspect} / ${aspect}` }}>
+      {/* Slides */}
+      <div
+        style={{
+          position:"absolute", inset:0, display:"grid",
+          gridTemplateColumns: `repeat(${items.length}, 100%)`,
+          transform: `translateX(calc(${index} * -100%))`,
+          transition: "transform .25s ease-out"
+        }}
+      >
+        {items.map((m,i) => {
+          const isActive = i === index;
+          if (m.type === "video") {
+            return (
+              <video
+                key={i}
+                ref={el => setVideoRef(i, el)}
+                className="video-el"
+                src={m.src}
+                poster={m.poster || m.thumb}
+                playsInline
+                controls={false}
+                muted={muted}
+                preload="metadata"
+                onCanPlay={e => { if (isActive) try { e.currentTarget.play(); } catch {} }}
+                onEnded={() => {/* stay */}}
+                style={{ width:"100%", height:"100%", objectFit:"contain" }}
+              />
+            );
+          }
+          return (
             <img
-              className="igcar-img"
-              src={it.url}
-              alt={it.alt || ""}
-              loading={i <= 1 ? "eager" : "lazy"}
-              decoding="async"
+              key={i}
+              className="video-el"
+              src={m.src}
+              alt={m.alt || ""}
+              draggable={false}
+              style={{ width:"100%", height:"100%", objectFit:"contain" }}
             />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {hasMany && (
-  <>
-    {/* mobile count pill */}
-    <div
-      className="igcar-count"
-      aria-live="polite"
-      aria-atomic="true"
-      role="status"
-    >
-      {idx + 1} / {items.length}
-    </div>
+      {/* Controls overlay */}
+      {items.length > 1 ? (
+        <div className="fb-controls" style={{ opacity: 1, pointerEvents: "auto" }}>
+          <button className="fb-btn" aria-label="Prev" onClick={()=>goto(index-1)}>‹</button>
+          <div className="fb-spacer" />
+          <button className="fb-btn" aria-label="Next" onClick={()=>goto(index+1)}>›</button>
+        </div>
+      ) : null}
 
-    <button className="igcar-arrow left"  onClick={() => setIdx(i => Math.max(0, i-1))} aria-label="Previous" />
-    <button className="igcar-arrow right" onClick={() => setIdx(i => Math.min(items.length-1, i+1))} aria-label="Next" />
-    <div className="igcar-dots">
-      {items.map((_, i) => (
-        <button key={i} className={`dot ${i===idx?"on":""}`} onClick={() => setIdx(i)} aria-label={`Slide ${i+1}`} />
-      ))}
-    </div>
-  </>
-)}
+      {/* Mute button (global for all slides) */}
+      {enableVideoControls ? (
+        <button className="video-mute-btn" onClick={toggleMute} aria-pressed={!muted}>
+          {muted ? <IconVolumeMute/> : <IconVolume/>}
+        </button>
+      ) : null}
+
+      {/* Dots */}
+      {showDots && items.length > 1 ? (
+        <div style={{
+          position:"absolute", left:0, right:0, bottom:8, display:"flex",
+          gap:6, justifyContent:"center"
+        }}>
+          {items.map((_,i)=>(
+            <button
+              key={i}
+              aria-label={`Go to slide ${i+1}`}
+              onClick={()=>goto(i)}
+              style={{
+                width:6, height:6, borderRadius:999, border:0, cursor:"pointer",
+                background: i===index ? "#fff" : "rgba(255,255,255,.45)"
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
