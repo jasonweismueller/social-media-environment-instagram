@@ -9,8 +9,8 @@ import {
   loadPostsFromBackend,
   startSessionWatch,
   touchAdminSession,
-} from "../utils"; // shared utils folder
-import "../styles.css"; // merged stylesheet
+} from "./utils"; // shared utils folder
+import "./styles.css"; // merged stylesheet
 
 export default function App() {
   const [projects, setProjects] = useState([]);
