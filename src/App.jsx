@@ -1,4 +1,3 @@
-/// App.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import "./styles.css";
@@ -9,6 +8,11 @@ import {
   sendToSheet, buildMinimalHeader, buildParticipantRow,
   computeFeedId, getDefaultFeedFromBackend,
   hasAdminSession, adminLogout,
+  // ⬇️ new imports for project/feed helpers
+  getProjectId as getProjectIdUtil,
+  setProjectId as setProjectIdUtil,
+  getFeedIdFromUrl,
+  setFeedIdInUrl,
 } from "./utils";
 
 import { Feed as FBFeed } from "./components-ui-posts";
@@ -20,17 +24,10 @@ import {
 import { AdminDashboard } from "./components-admin-core";
 import AdminLogin from "./components-admin-login";
 
+// ---- Mode flag ----
 const MODE = (new URLSearchParams(location.search).get("style") || window.CONFIG?.STYLE || "fb").toLowerCase();
 if (typeof document !== "undefined") {
   document.body.classList.toggle("ig-mode", MODE === "ig");
-}
-
-function getFeedFromHash() {
-  try {
-    const h = typeof window !== "undefined" ? window.location.hash : "";
-    const m = h.match(/[?&]feed=([^&#]+)/);
-    return m ? decodeURIComponent(m[1]) : null;
-  } catch { return null; }
 }
 
 /* ---------- Rail placeholders (kept compact to avoid rail overflow) ---------- */
@@ -64,7 +61,6 @@ function RailList({ rows = 4 }) {
     </div>
   );
 }
-/** Column wrapper: identical vertical spacing; never adds its own scroll */
 function RailStack({ children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%" }}>
@@ -73,41 +69,28 @@ function RailStack({ children }) {
   );
 }
 
-/** Centered feed with non-scrolling sticky rails.
- *  IMPORTANT: we size the right rail’s item count to FIT the rail height,
- *  so the rail itself never needs to scroll.
- */
 function PageWithRails({ children }) {
   const [rightCount, setRightCount] = useState(12);
-
   useEffect(() => {
     const compute = () => {
-      const railGap = 30; // matches --rail-gap default
+      const railGap = 30;
       const railH = (window.innerHeight || 900) - railGap;
-
-      // Rough per-block heights including the 14px gap:
       const H_BANNER = 170 + 14;
       const H_TBANNER = 220 + 14;
-      const H_BOX = 120 + 14;     // compact card
-      const H_LIST = 110 + 14;    // small list
-
-      // We place a tall banner first; fill remaining height with a repeating pattern.
+      const H_BOX = 120 + 14;
+      const H_LIST = 110 + 14;
       const fixedTop = H_TBANNER;
-      let remaining = Math.max(railH - fixedTop - H_BANNER, 0); // reserve a normal banner near bottom
-
-      // Alternate box/list/box to keep it visually distinct and compact.
+      let remaining = Math.max(railH - fixedTop - H_BANNER, 0);
       const patternHeights = [H_BOX, H_LIST, H_BOX];
       let n = 0, acc = 0;
       while (acc + patternHeights[n % patternHeights.length] <= remaining) {
         acc += patternHeights[n % patternHeights.length];
         n += 1;
-        if (n > 50) break; // safety
+        if (n > 50) break;
       }
-      // Ensure minimum density, but never let it overflow:
       const safeCount = Math.max(8, Math.min(n, 30));
       setRightCount(safeCount);
     };
-
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
@@ -117,13 +100,10 @@ function PageWithRails({ children }) {
     <div
       className="page"
       style={{
-        // widen rails, keep center fixed width window from CSS vars
-        gridTemplateColumns:
-          "minmax(0,2fr) minmax(var(--feed-min), var(--feed-max)) minmax(0,2.25fr)",
+        gridTemplateColumns: "minmax(0,2fr) minmax(var(--feed-min), var(--feed-max)) minmax(0,2.25fr)",
         columnGap: "var(--gap)",
       }}
     >
-      {/* LEFT rail — NO overflow override (keeps CSS: sticky + overflow:hidden) */}
       <aside className="rail rail-left" aria-hidden="true">
         <RailStack>
           <RailBanner tall />
@@ -133,11 +113,7 @@ function PageWithRails({ children }) {
           <RailBanner />
         </RailStack>
       </aside>
-
-      {/* CENTER feed — the only scrollable column */}
       <div className="container feed">{children}</div>
-
-      {/* RIGHT rail — sized to FIT the rail height; no internal scrollbar */}
       <aside className="rail rail-right" aria-hidden="true">
         <RailStack>
           <RailBanner tall />
@@ -158,19 +134,24 @@ export default function App() {
   const submitTsRef = useRef(null);
   const lastNonScrollTsRef = useRef(null);
 
-  const [randomize, setRandomize] = useState(true);
-  const [showComposer, setShowComposer] = useState(false);
-  const [participantId, setParticipantId] = useState("");
-  const [hasEntered, setHasEntered] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [adminAuthed, setAdminAuthed] = useState(false);
+  // ✅ project ID (from URL or local storage)
+  const [projectId, setProjectIdState] = useState(() => getProjectIdUtil() || "");
+  useEffect(() => { setProjectIdUtil(projectId, { persist: true, updateUrl: false }); }, [projectId]);
+
+  // ✅ runSeed (deterministic for this session)
+  const [runSeed] = useState(() =>
+    (crypto?.getRandomValues
+      ? Array.from(crypto.getRandomValues(new Uint32Array(2))).join("-")
+      : String(Date.now()) + "-" + Math.random().toString(36).slice(2))
+  );
 
   const onAdmin = typeof window !== "undefined" && window.location.hash.startsWith("#/admin");
-  const [activeFeedId, setActiveFeedId] = useState(!onAdmin ? getFeedFromHash() : null);
+  const [activeFeedId, setActiveFeedId] = useState(!onAdmin ? getFeedIdFromUrl() : null);
 
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
 
+  // ✅ Load default feed if none in URL
   useEffect(() => {
     if (onAdmin || activeFeedId) return;
     let alive = true;
@@ -178,6 +159,7 @@ export default function App() {
       const id = await getDefaultFeedFromBackend();
       if (!alive) return;
       setActiveFeedId(id || "feed_1");
+      try { setFeedIdInUrl(id, { replace: true }); } catch {}
     })();
     return () => { alive = false; };
   }, [onAdmin, activeFeedId]);
@@ -198,10 +180,14 @@ export default function App() {
     return () => { alive = false; };
   }, [onAdmin, activeFeedId]);
 
-  useEffect(() => {
-    if (onAdmin && hasAdminSession()) setAdminAuthed(true);
-  }, [onAdmin]);
+  const [adminAuthed, setAdminAuthed] = useState(false);
+  useEffect(() => { if (onAdmin && hasAdminSession()) setAdminAuthed(true); }, [onAdmin]);
 
+  const [randomize, setRandomize] = useState(true);
+  const [showComposer, setShowComposer] = useState(false);
+  const [participantId, setParticipantId] = useState("");
+  const [hasEntered, setHasEntered] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const [toast, setToast] = useState(null);
   const [events, setEvents] = useState([]);
@@ -212,7 +198,6 @@ export default function App() {
     return arr;
   }, [posts, randomize]);
 
-  // Lock page scroll only during overlays; otherwise allow page scroll so center column scrolls and rails stick.
   useEffect(() => {
     const el = document.documentElement;
     const prev = el.style.overflow;
@@ -239,6 +224,8 @@ export default function App() {
       elapsed_ms: ts - t0Ref.current,
       ts_ms: ts,
       action,
+      feed_id: activeFeedId || null,
+      project_id: projectId || null,
       ...meta,
     };
     setEvents((prev) => [...prev, rec]);
@@ -252,96 +239,12 @@ export default function App() {
     log("session_start", {
       user_agent: navigator.userAgent,
       feed_id: activeFeedId || null,
+      project_id: projectId || null,
     });
     const onEnd = () => log("session_end", { total_events: events.length });
     window.addEventListener("beforeunload", onEnd);
     return () => window.removeEventListener("beforeunload", onEnd);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const dir = y > lastY ? "down" : y < lastY ? "up" : "none";
-      lastY = y;
-      log("scroll", { y, direction: dir });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!hasEntered || loadingPosts || submitted || onAdmin) return;
-
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        const postId = elToId.current.get(e.target);
-        if (!postId) continue;
-        const prev = dwell.current.get(postId) || { visible: false, tStart: 0, total: 0 };
-        if (e.isIntersecting && e.intersectionRatio > 0) {
-          if (!prev.visible) {
-            const next = { ...prev, visible: true, tStart: now() };
-            dwell.current.set(postId, next);
-            log("view_start", { post_id: postId, ratio: e.intersectionRatio });
-          }
-        } else if (prev.visible) {
-          const dur = clamp(now() - prev.tStart, 0, 1000 * 60 * 60);
-          const next = { visible: false, tStart: 0, total: prev.total + dur };
-          dwell.current.set(postId, next);
-          log("view_end", { post_id: postId, duration_ms: dur, total_ms: next.total });
-        }
-      }
-    }, { root: null, rootMargin: "0px", threshold: [0, 0.2, 0.5, 0.8, 1] });
-
-    for (const [, el] of viewRefs.current) io.observe(el);
-
-    const inViewport = (el) => {
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
-      return r.bottom > 0 && r.right > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
-    };
-
-    const pauseVisible = () => {
-      const ts = now();
-      for (const [postId, rec] of dwell.current) {
-        if (rec.visible) {
-          const dur = clamp(ts - rec.tStart, 0, 1000 * 60 * 60);
-          dwell.current.set(postId, { visible: false, tStart: 0, total: rec.total + dur });
-          log("view_end", { post_id: postId, duration_ms: dur, total_ms: rec.total + dur, reason: "page_hidden" });
-        }
-      }
-    };
-
-    const resumeIfVisible = () => {
-      const ts = now();
-      for (const [postId, el] of viewRefs.current) {
-        if (!el) continue;
-        const rec = dwell.current.get(postId) || { visible: false, tStart: 0, total: 0 };
-        if (!rec.visible && inViewport(el)) {
-          dwell.current.set(postId, { visible: true, tStart: ts, total: rec.total });
-          log("view_start", { post_id: postId, ratio: 1, reason: "page_visible" });
-        }
-      }
-    };
-
-    const onVis = () => (document.hidden ? pauseVisible() : resumeIfVisible());
-    const onBlur = pauseVisible;
-    const onFocus = resumeIfVisible;
-
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      io.disconnect();
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedPosts, hasEntered, loadingPosts, submitted, onAdmin]);
 
   const FeedComponent = FBFeed;
 
@@ -367,13 +270,15 @@ export default function App() {
                     log={log}
                     showComposer={showComposer}
                     loading={loadingPosts}
+                    app={MODE}
+                    projectId={projectId}
+                    feedId={activeFeedId}
+                    runSeed={runSeed}
                     onSubmit={async () => {
                       if (submitted || disabled) return;
                       setDisabled(true);
-
                       const ts = now();
                       submitTsRef.current = ts;
-
                       const submitEvent = {
                         session_id: sessionIdRef.current,
                         participant_id: participantId || null,
@@ -382,12 +287,11 @@ export default function App() {
                         ts_ms: ts,
                         action: "feed_submit",
                         feed_id: activeFeedId || null,
+                        project_id: projectId || null,
                       };
                       const eventsWithSubmit = [...events, submitEvent];
-
                       const feed_id = activeFeedId || null;
                       const feed_checksum = computeFeedId(posts);
-
                       const row = buildParticipantRow({
                         session_id: sessionIdRef.current,
                         participant_id: participantId,
@@ -396,17 +300,10 @@ export default function App() {
                         feed_id,
                         feed_checksum,
                       });
-
                       const header = buildMinimalHeader(posts);
                       const ok = await sendToSheet(header, row, eventsWithSubmit, feed_id);
-
-                      if (ok) {
-                        setSubmitted(true);
-                        showToast("Submitted ✔︎");
-                      } else {
-                        showToast("Sync failed. Please try again.");
-                      }
-
+                      showToast(ok ? "Submitted ✔︎" : "Sync failed. Please try again.");
+                      if (ok) setSubmitted(true);
                       setDisabled(false);
                     }}
                   />
@@ -416,7 +313,6 @@ export default function App() {
               </PageWithRails>
             }
           />
-
           <Route
             path="/admin"
             element={
@@ -473,7 +369,7 @@ export default function App() {
             setHasEntered(true);
             enterTsRef.current = ts;
             lastNonScrollTsRef.current = null;
-            log("participant_id_entered", { id, feed_id: activeFeedId || null });
+            log("participant_id_entered", { id, feed_id: activeFeedId || null, project_id: projectId || null });
           }}
         />
       )}

@@ -14,8 +14,98 @@ export const uid = () =>
 export const now = () => Date.now();
 export const fmtTime = (ms) => new Date(ms).toISOString();
 export const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-export const getUrlParam = (key) =>
-  new URLSearchParams(window.location.search).get(key || "");
+
+
+/* ============================ Project + URL helpers ============================= */
+const PROJECT_KEY = "current_project_id";
+
+function getCombinedSearchParams() {
+  try {
+    const real = new URLSearchParams(window.location.search);
+    const hash = window.location.hash || "";
+    const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+    const fromHash = new URLSearchParams(q);
+
+    const merged = new URLSearchParams();
+    for (const [k, v] of real) merged.set(k, v);
+    for (const [k, v] of fromHash) merged.set(k, v);
+    return merged;
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+export const getUrlParam = (key = "") => getCombinedSearchParams().get(key);
+
+export function getProjectId() {
+  try {
+    const fromUrl = getUrlParam("project_id");
+    if (fromUrl) return fromUrl;
+    const fromLocal = localStorage.getItem(PROJECT_KEY);
+    if (fromLocal) return fromLocal;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setProjectId(projectId, { persist = true, updateUrl = true } = {}) {
+  try {
+    if (projectId) {
+      if (persist) localStorage.setItem(PROJECT_KEY, projectId);
+      if (updateUrl) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("project_id", projectId);
+        window.history.replaceState({}, "", url);
+      }
+    }
+  } catch (e) {
+    console.warn("setProjectId failed:", e);
+  }
+}
+
+export const qProject = () => {
+  const id = getProjectId();
+  return id ? `&project_id=${encodeURIComponent(id)}` : "";
+};
+
+export function getFeedIdFromUrl() {
+  try {
+    return getUrlParam("feed") || getUrlParam("feed_id") || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setFeedIdInUrl(feedId, { replace = false } = {}) {
+  try {
+    if (!feedId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("feed", feedId);
+    if (replace) {
+      window.history.replaceState({}, "", url);
+    } else {
+      window.history.pushState({}, "", url);
+    }
+  } catch (e) {
+    console.warn("setFeedIdInUrl failed:", e);
+  }
+}
+
+export function buildFeedShareUrl(feedOrId) {
+  try {
+    const id = typeof feedOrId === "object" ? feedOrId.feed_id : feedOrId;
+    const base = new URL(window.location.origin + window.location.pathname);
+    const pid = getProjectId();
+    if (id) base.searchParams.set("feed", id);
+    if (pid) base.searchParams.set("project_id", pid);
+    base.searchParams.set("app", APP);
+    return base.toString();
+  } catch {
+    return window.location.href;
+  }
+}
+
 
 export const abbr =
   (n) =>
