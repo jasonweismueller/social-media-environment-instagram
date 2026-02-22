@@ -537,23 +537,18 @@ const seedParts = [
           }}
         />
       ) : image?.url ? (
-        <img
-          src={image.url}
-          alt={image.alt || ""}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            // honor focal point if provided
-            objectPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
-          }}
-          loading="lazy"
-          decoding="async"
-        />
-      ) : null}
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      backgroundImage: `url(${image.url})`,
+      backgroundRepeat: "no-repeat",
+      backgroundPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
+      backgroundSize: `${Math.max(1, Number(image.zoom ?? 1)) * 100}%`,
+    }}
+    aria-label={image.alt || ""}
+  />
+) : null}
     </div>
   </div>
 )}

@@ -5,7 +5,15 @@ import { randomSVG, uploadFileToS3ViaSigner } from "./utils";
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
 /* ================== Square focal-point cropper (shared) ================== */
-function ImageCropper({ src, alt = "", focalX = 50, focalY = 50, onChange, disabled = false }) {
+function ImageCropper({
+  src,
+  alt = "",
+  focalX = 50,
+  focalY = 50,
+  zoom = 1,
+  onChange,
+  disabled = false
+}) {
   const wrapRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -16,7 +24,7 @@ function ImageCropper({ src, alt = "", focalX = 50, focalY = 50, onChange, disab
     const clientY = "touches" in e ? (e.touches[0]?.clientY ?? 0) : e.clientY;
     const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 0, 100);
     const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 0, 100);
-    onChange?.({ focalX: Math.round(xPct), focalY: Math.round(yPct) });
+    onChange?.({ focalX: Math.round(xPct), focalY: Math.round(yPct), zoom });
   }, [dragging, onChange]);
 
   const startDrag = useCallback((e) => {
@@ -63,12 +71,22 @@ function ImageCropper({ src, alt = "", focalX = 50, focalY = 50, onChange, disab
         onTouchStart={startDrag}
       >
         {src ? (
-          <img
-            src={src}
-            alt={alt}
-            style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition, display:"block" }}
-            draggable={false}
-          />
+         <img
+  src={src}
+  alt={alt}
+  style={{
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition,
+    transform: `scale(${Number(zoom ?? 1)})`,
+    transformOrigin: objectPosition,
+    display: "block"
+  }}
+  draggable={false}
+/>
         ) : (
           <div style={{ position:"absolute", inset:0, display:"grid", placeItems:"center", color:"#9ca3af" }}>No image</div>
         )}
@@ -89,12 +107,24 @@ function ImageCropper({ src, alt = "", focalX = 50, focalY = 50, onChange, disab
       <div className="grid-2" style={{ gap: 12 }}>
         <label> X position
           <input type="range" min={0} max={100} value={focalX}
-                 onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY })} disabled={disabled}/>
+                 onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY, zoom })} disabled={disabled}/>
         </label>
         <label> Y position
           <input type="range" min={0} max={100} value={focalY}
-                 onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value) })} disabled={disabled}/>
+                 onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value), zoom })} disabled={disabled}/>
         </label>
+        <label> Zoom
+  <input
+    type="range"
+    min={1}
+    max={3}
+    step={0.01}
+    value={Number(zoom ?? 1)}
+    onChange={(e) => onChange?.({ focalX, focalY, zoom: Number(e.target.value) })}
+    disabled={disabled}
+  />
+  <div className="subtle">{Number(zoom ?? 1).toFixed(2)}×</div>
+</label>
       </div>
       <div className="subtle" style={{ marginTop: 4 }}>Tip: drag inside the square to reposition; sliders fine-tune.</div>
     </div>
@@ -375,7 +405,7 @@ export function MediaFieldset({
                       setEditing((ed) => ({
                         ...ed,
                         imageMode: "url",
-                        image: { alt: "Image", url: cdnUrl, focalX: 50, focalY: 50 },
+                        image: { alt: "Image", url: cdnUrl, focalX: 50, focalY: 50, zoom: 1 },
                       }));
                       alert("Image uploaded ✔");
                     } catch (err) {
@@ -391,14 +421,18 @@ export function MediaFieldset({
 
             {imageMode !== "none" && imgUrl && (
               <ImageCropper
-                src={imgUrl}
-                alt={editing.image?.alt || ""}
-                focalX={focalX}
-                focalY={focalY}
-                onChange={({ focalX: x, focalY: y }) =>
-                  setEditing((ed) => ({ ...ed, image: { ...(ed.image || {}), focalX: x, focalY: y } }))
-                }
-              />
+  src={imgUrl}
+  alt={editing.image?.alt || ""}
+  focalX={focalX}
+  focalY={focalY}
+  zoom={Number(editing.image?.zoom ?? 1)}
+  onChange={({ focalX: x, focalY: y, zoom }) =>
+    setEditing((ed) => ({
+      ...ed,
+      image: { ...(ed.image || {}), focalX: x, focalY: y, zoom: Number(zoom ?? ed.image?.zoom ?? 1) }
+    }))
+  }
+/>
             )}
 
             {imageMode === "random" && editing.image?.svg && (
