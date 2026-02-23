@@ -8,6 +8,9 @@ function toNum(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+
+
+
 /* ================== Square focal-point cropper (shared) ================== */
 function ImageCropper({
   src,
@@ -404,6 +407,8 @@ export function MediaFieldset({
   setUploadingVideo,
   setUploadingPoster,
 }) {
+  console.log("MEDIAFIELDSET LOADED >>>", "2026-02-23 01", { file: "components-admin-media.jsx" });
+
   // Normalize legacy shapes when opening an existing post
   useEffect(() => {
     if (!editing) return;
