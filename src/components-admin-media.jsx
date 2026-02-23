@@ -1,8 +1,12 @@
 // components-admin-media.jsx
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { randomSVG, uploadFileToS3ViaSigner } from "./utils";
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+function toNum(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 /* ================== Square focal-point cropper (shared) ================== */
 function ImageCropper({
@@ -12,50 +16,62 @@ function ImageCropper({
   focalY = 50,
   zoom = 1,
   onChange,
-  disabled = false
+  disabled = false,
 }) {
   const wrapRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
-  const onPointerMove = useCallback((e) => {
-    if (!dragging || !wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
-    const clientX = "touches" in e ? (e.touches[0]?.clientX ?? 0) : e.clientX;
-    const clientY = "touches" in e ? (e.touches[0]?.clientY ?? 0) : e.clientY;
+  const objectPosition = useMemo(() => `${focalX}% ${focalY}%`, [focalX, focalY]);
+  const bgSize = useMemo(() => `${Math.max(1, toNum(zoom, 1)) * 100}%`, [zoom]);
+
+  const updateFromXY = useCallback((clientX, clientY) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 0, 100);
     const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 0, 100);
-    onChange?.({ focalX: Math.round(xPct), focalY: Math.round(yPct), zoom });
-  }, [dragging, onChange, zoom]);
 
-  const startDrag = useCallback((e) => {
+    onChange?.({
+      focalX: Math.round(xPct),
+      focalY: Math.round(yPct),
+      zoom: Math.max(1, toNum(zoom, 1)),
+    });
+  }, [onChange, zoom]);
+
+  const onPointerDown = useCallback((e) => {
     if (disabled) return;
+    // left click only (mouse)
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
     setDragging(true);
-    onPointerMove(e);
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
+    updateFromXY(e.clientX, e.clientY);
     e.preventDefault();
-  }, [disabled, onPointerMove]);
+  }, [disabled, updateFromXY]);
 
-  const stopDrag = useCallback(() => setDragging(false), []);
-
-  React.useEffect(() => {
+  const onPointerMove = useCallback((e) => {
+    if (disabled) return;
     if (!dragging) return;
-    const move = (ev) => onPointerMove(ev);
-    const up = () => stopDrag();
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
-    document.addEventListener("touchmove", move, { passive: false });
-    document.addEventListener("touchend", up);
-    document.addEventListener("touchcancel", up);
-    return () => {
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
-      document.removeEventListener("touchmove", move);
-      document.removeEventListener("touchend", up);
-      document.removeEventListener("touchcancel", up);
-    };
-  }, [dragging, onPointerMove, stopDrag]);
+    updateFromXY(e.clientX, e.clientY);
+    e.preventDefault();
+  }, [disabled, dragging, updateFromXY]);
 
-  const objectPosition = useMemo(() => `${focalX}% ${focalY}%`, [focalX, focalY]);
-  const bgSize = useMemo(() => `${Math.max(1, Number(zoom ?? 1)) * 100}%`, [zoom]);
+  const endDrag = useCallback((e) => {
+    if (!dragging) return;
+    setDragging(false);
+    try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch {}
+  }, [dragging]);
+
+  const onWheel = useCallback((e) => {
+    if (disabled) return;
+    if (!src) return;
+    e.preventDefault();
+
+    // wheel up => zoom in
+    const cur = clamp(toNum(zoom, 1), 1, 3);
+    const next = clamp(cur + (-e.deltaY * 0.0018), 1, 3);
+    onChange?.({ focalX, focalY, zoom: Number(next.toFixed(2)) });
+  }, [disabled, src, zoom, onChange, focalX, focalY]);
 
   return (
     <div>
@@ -71,11 +87,15 @@ function ImageCropper({
           overflow: "hidden",
           background: "#f3f4f6",
           userSelect: "none",
+          touchAction: "none", // CRITICAL for pointer dragging on touchpads/touch
           cursor: disabled ? "default" : (dragging ? "grabbing" : "grab"),
           boxShadow: "inset 0 0 0 1px rgba(0,0,0,.05)",
         }}
-        onMouseDown={startDrag}
-        onTouchStart={startDrag}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onWheel={onWheel}
       >
         {src ? (
           <div
@@ -90,15 +110,7 @@ function ImageCropper({
             aria-label={alt || ""}
           />
         ) : (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "grid",
-              placeItems: "center",
-              color: "#9ca3af",
-            }}
-          >
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#9ca3af" }}>
             No image
           </div>
         )}
@@ -153,16 +165,16 @@ function ImageCropper({
             min={1}
             max={3}
             step={0.01}
-            value={Number(zoom ?? 1)}
+            value={toNum(zoom, 1)}
             onChange={(e) => onChange?.({ focalX, focalY, zoom: Number(e.target.value) })}
             disabled={disabled}
           />
-          <div className="subtle">{Number(zoom ?? 1).toFixed(2)}×</div>
+          <div className="subtle">{toNum(zoom, 1).toFixed(2)}×</div>
         </label>
       </div>
 
       <div className="subtle" style={{ marginTop: 4 }}>
-        Tip: drag inside the square to reposition; sliders fine-tune.
+        Tip: drag inside the square to reposition; scroll to zoom; sliders fine-tune.
       </div>
     </div>
   );
@@ -188,11 +200,7 @@ function Thumb({ src, active, onClick, onRemove, idx }) {
         title={`Image ${idx + 1}`}
       >
         {src ? (
-          <img
-            src={src}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
+          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         ) : (
           <div style={{ width: "100%", height: "100%", background: "#f3f4f6" }} />
         )}
@@ -253,7 +261,6 @@ function CarouselEditor({ images, setImages, feedId, isNew }) {
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {/* thumbs */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {images.map((img, i) => (
           <Thumb
@@ -295,7 +302,6 @@ function CarouselEditor({ images, setImages, feedId, isNew }) {
         </label>
       </div>
 
-      {/* add via URL */}
       <div className="grid-2">
         <label>
           Add image by URL
@@ -315,16 +321,15 @@ function CarouselEditor({ images, setImages, feedId, isNew }) {
         <div />
       </div>
 
-      {/* cropper for selected */}
       {current?.url ? (
         <ImageCropper
           src={current.url}
           alt={current.alt || ""}
-          focalX={Number(current.focalX ?? 50)}
-          focalY={Number(current.focalY ?? 50)}
-          zoom={Number(current.zoom ?? 1)}
+          focalX={toNum(current.focalX, 50)}
+          focalY={toNum(current.focalY, 50)}
+          zoom={toNum(current.zoom, 1)}
           onChange={({ focalX, focalY, zoom }) =>
-            replaceAt(safeSel, { ...current, focalX, focalY, zoom: Number(zoom ?? 1) })
+            replaceAt(safeSel, { ...current, focalX, focalY, zoom: toNum(zoom, 1) })
           }
         />
       ) : (
@@ -343,10 +348,38 @@ export function MediaFieldset({
   setUploadingVideo,
   setUploadingPoster,
 }) {
-  // Single-image helpers
-  const imgUrl = editing.image?.url || "";
-  const focalX = Number(editing.image?.focalX ?? 50);
-  const focalY = Number(editing.image?.focalY ?? 50);
+  // Normalize legacy shapes when opening an existing post
+  useEffect(() => {
+    if (!editing) return;
+
+    // If image accidentally is a plain URL string
+    if (typeof editing.image === "string" && editing.image.trim()) {
+      const url = editing.image.trim();
+      setEditing((ed) => ({
+        ...ed,
+        imageMode: ed.imageMode && ed.imageMode !== "none" ? ed.imageMode : "url",
+        image: { url, alt: "Image", focalX: 50, focalY: 50, zoom: 1 },
+      }));
+    }
+
+    // If carousel items are strings
+    if (Array.isArray(editing.images) && editing.images.some((x) => typeof x === "string")) {
+      setEditing((ed) => ({
+        ...ed,
+        images: (ed.images || []).map((x) =>
+          typeof x === "string" ? { url: x, alt: "Image", focalX: 50, focalY: 50, zoom: 1 } : x
+        ),
+      }));
+    }
+    // run on post switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id]);
+
+  const imgObj = (editing.image && typeof editing.image === "object") ? editing.image : null;
+  const imgUrl = imgObj?.url || "";
+  const focalX = toNum(imgObj?.focalX, 50);
+  const focalY = toNum(imgObj?.focalY, 50);
+  const zoom = toNum(imgObj?.zoom, 1);
 
   const imageMode = editing.imageMode || "none";
   const images = Array.isArray(editing.images) ? editing.images : [];
@@ -374,30 +407,42 @@ export function MediaFieldset({
             }
             onChange={(e) => {
               const type = e.target.value;
+
               if (type === "none") {
                 setEditing(ed => ({
                   ...ed,
                   imageMode: "none", image: null, images: [],
                   videoMode: "none", video: null, videoPosterUrl: ""
                 }));
-              } else if (type === "image") {
+                return;
+              }
+
+              if (type === "image") {
                 setEditing(ed => ({
                   ...ed,
                   videoMode: "none", video: null, videoPosterUrl: "",
                   imageMode: (ed.imageMode === "none" || ed.imageMode === "multi" ? "random" : ed.imageMode) || "random",
                   images: [],
-                  image: ed.image || { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 },
+                  image: (ed.image && typeof ed.image === "object")
+                    ? { zoom: 1, focalX: 50, focalY: 50, ...ed.image }
+                    : { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 },
                 }));
-              } else if (type === "carousel") {
+                return;
+              }
+
+              if (type === "carousel") {
                 setEditing(ed => ({
                   ...ed,
                   videoMode: "none", video: null, videoPosterUrl: "",
                   imageMode: "multi",
                   images: (ed.images && ed.images.length)
-                    ? ed.images
-                    : (ed.image?.url ? [{ ...ed.image, zoom: Number(ed.image?.zoom ?? 1) }] : []),
+                    ? ed.images.map(x => ({ zoom: 1, focalX: 50, focalY: 50, ...x }))
+                    : (ed.image && typeof ed.image === "object" && ed.image.url ? [{ zoom: 1, focalX: 50, focalY: 50, ...ed.image }] : []),
                 }));
-              } else if (type === "video") {
+                return;
+              }
+
+              if (type === "video") {
                 setEditing(ed => ({
                   ...ed,
                   imageMode: "none", image: null, images: [],
@@ -424,11 +469,26 @@ export function MediaFieldset({
                   className="select"
                   value={imageMode}
                   onChange={(e) => {
-                    const m = e.target.value; // random | upload | url | none
-                    let image = editing.image;
-                    if (m === "none") image = null;
-                    if (m === "random") image = { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 };
-                    setEditing({ ...editing, imageMode: m, image });
+                    const m = e.target.value;
+
+                    if (m === "none") {
+                      setEditing(ed => ({ ...ed, imageMode: "none", image: null }));
+                      return;
+                    }
+
+                    if (m === "random") {
+                      setEditing(ed => ({ ...ed, imageMode: "random", image: { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 } }));
+                      return;
+                    }
+
+                    // url/upload: keep object shape
+                    setEditing(ed => ({
+                      ...ed,
+                      imageMode: m,
+                      image: (ed.image && typeof ed.image === "object")
+                        ? { zoom: 1, focalX: 50, focalY: 50, ...ed.image }
+                        : { url: "", alt: "Image", focalX: 50, focalY: 50, zoom: 1 },
+                    }));
                   }}
                 >
                   <option value="random">Random graphic</option>
@@ -444,19 +504,19 @@ export function MediaFieldset({
                 Image URL
                 <input
                   className="input"
-                  value={(editing.image && editing.image.url) || ""}
+                  value={imgUrl}
                   onChange={(e) =>
-                    setEditing({
-                      ...editing,
+                    setEditing((ed) => ({
+                      ...ed,
+                      imageMode: "url",
                       image: {
-                        ...(editing.image || {}),
                         url: e.target.value,
-                        alt: (editing.image && editing.image.alt) || "Image",
-                        focalX: editing.image?.focalX ?? 50,
-                        focalY: editing.image?.focalY ?? 50,
-                        zoom: Number(editing.image?.zoom ?? 1),
+                        alt: imgObj?.alt || "Image",
+                        focalX,
+                        focalY,
+                        zoom,
                       },
-                    })
+                    }))
                   }
                 />
               </label>
@@ -484,6 +544,7 @@ export function MediaFieldset({
                       });
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
+
                       setEditing((ed) => ({
                         ...ed,
                         imageMode: "url",
@@ -501,21 +562,23 @@ export function MediaFieldset({
               </label>
             )}
 
-            {imageMode !== "none" && imgUrl && (
+            {imageMode !== "none" && !!imgUrl && (
               <ImageCropper
                 src={imgUrl}
-                alt={editing.image?.alt || ""}
+                alt={imgObj?.alt || ""}
                 focalX={focalX}
                 focalY={focalY}
-                zoom={Number(editing.image?.zoom ?? 1)}
-                onChange={({ focalX: x, focalY: y, zoom }) =>
+                zoom={zoom}
+                onChange={({ focalX: x, focalY: y, zoom: z }) =>
                   setEditing((ed) => ({
                     ...ed,
                     image: {
-                      ...(ed.image || {}),
-                      focalX: x,
-                      focalY: y,
-                      zoom: Number(zoom ?? ed.image?.zoom ?? 1),
+                      ...(ed.image && typeof ed.image === "object" ? ed.image : {}),
+                      url: imgUrl,
+                      alt: (ed.image && typeof ed.image === "object" ? ed.image.alt : "Image") || "Image",
+                      focalX: toNum(x, 50),
+                      focalY: toNum(y, 50),
+                      zoom: toNum(z, 1),
                     },
                   }))
                 }
@@ -567,7 +630,7 @@ export function MediaFieldset({
                   className="select"
                   value={editing.videoMode}
                   onChange={(e) => {
-                    const m = e.target.value; // "url" | "upload"
+                    const m = e.target.value;
                     setEditing(ed => ({
                       ...ed,
                       videoMode: m,
