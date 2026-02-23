@@ -377,11 +377,23 @@ export function MediaFieldset({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id]);
 
-  const imgObj = (editing.image && typeof editing.image === "object") ? editing.image : null;
-  const imgUrl = imgObj?.url || "";
-  const focalX = toNum(imgObj?.focalX, 50);
-  const focalY = toNum(imgObj?.focalY, 50);
-  const zoom = toNum(imgObj?.zoom, 1);
+   // Single-image helpers (tolerate legacy shapes)
+  const imageObj =
+    !editing.image ? null
+    : typeof editing.image === "string"
+      ? { url: editing.image, alt: "Image", focalX: 50, focalY: 50, zoom: 1 }
+      : {
+          ...editing.image,
+          url: editing.image.url || editing.image.src || editing.image.imageUrl || "",
+          focalX: Number(editing.image.focalX ?? 50),
+          focalY: Number(editing.image.focalY ?? 50),
+          zoom: Number(editing.image.zoom ?? 1),
+        };
+
+  const imgUrl = imageObj?.url || "";
+  const focalX = Number(imageObj?.focalX ?? 50);
+  const focalY = Number(imageObj?.focalY ?? 50);
+  const zoom   = Number(imageObj?.zoom ?? 1);
 
   const imageMode = editing.imageMode || "none";
   const images = Array.isArray(editing.images) ? editing.images : [];
@@ -564,28 +576,28 @@ export function MediaFieldset({
               </label>
             )}
 
-            {imageMode !== "none" && !!imgUrl && (
-              <ImageCropper
-                src={imgUrl}
-                alt={imgObj?.alt || ""}
-                focalX={focalX}
-                focalY={focalY}
-                zoom={zoom}
-                onChange={({ focalX: x, focalY: y, zoom: z }) =>
-                  setEditing((ed) => ({
-                    ...ed,
-                    image: {
-                      ...(ed.image && typeof ed.image === "object" ? ed.image : {}),
-                      url: imgUrl,
-                      alt: (ed.image && typeof ed.image === "object" ? ed.image.alt : "Image") || "Image",
-                      focalX: toNum(x, 50),
-                      focalY: toNum(y, 50),
-                      zoom: toNum(z, 1),
-                    },
-                  }))
-                }
-              />
-            )}
+         {imageMode !== "none" && imgUrl && (
+  <ImageCropper
+    src={imgUrl}
+    alt={imageObj?.alt || ""}
+    focalX={focalX}
+    focalY={focalY}
+    zoom={zoom}
+    onChange={({ focalX: x, focalY: y, zoom: z }) =>
+      setEditing((ed) => ({
+        ...ed,
+        image: {
+          ...(typeof ed.image === "object" && ed.image ? ed.image : {}),
+          url: imgUrl,                 // keep url stable
+          alt: imageObj?.alt || "Image",
+          focalX: x,
+          focalY: y,
+          zoom: Number(z ?? 1),
+        },
+      }))
+    }
+  />
+)}
 
             {imageMode === "random" && editing.image?.svg && (
               <div

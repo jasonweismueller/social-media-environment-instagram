@@ -77,6 +77,68 @@ function msToMinSec(n) {
   return `${m}:${sec}`;
 }
 
+function normalizeImage(img) {
+  if (!img) return null;
+
+  // legacy: string url
+  if (typeof img === "string") {
+    return { url: img, alt: "Image", focalX: 50, focalY: 50, zoom: 1 };
+  }
+
+  // legacy: {src: "..."} or {imageUrl:"..."} patterns
+  const url = img.url || img.src || img.imageUrl || "";
+  if (!url && img.svg) {
+    // randomSVG object, keep as-is for random mode
+    return { ...img, focalX: Number(img.focalX ?? 50), focalY: Number(img.focalY ?? 50), zoom: Number(img.zoom ?? 1) };
+  }
+
+  return {
+    ...img,
+    url,
+    alt: img.alt || "Image",
+    focalX: Number(img.focalX ?? 50),
+    focalY: Number(img.focalY ?? 50),
+    zoom: Number(img.zoom ?? 1),
+  };
+}
+
+function normalizeImagesArray(images) {
+  if (!Array.isArray(images)) return [];
+  return images
+    .map((it) => {
+      if (!it) return null;
+      if (typeof it === "string") return { url: it, alt: "Image", focalX: 50, focalY: 50, zoom: 1 };
+      return {
+        ...it,
+        url: it.url || it.src || it.imageUrl || "",
+        alt: it.alt || "Image",
+        focalX: Number(it.focalX ?? 50),
+        focalY: Number(it.focalY ?? 50),
+        zoom: Number(it.zoom ?? 1),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizePostMedia(p) {
+  const out = { ...p };
+
+  out.image = normalizeImage(out.image);
+
+  // If you ever stored carousel images elsewhere, normalize them too
+  out.images = normalizeImagesArray(out.images);
+
+  // Infer imageMode if missing/legacy
+  if (!out.imageMode) {
+    out.imageMode = out.images?.length ? "multi" : (out.image?.url ? "url" : (out.image?.svg ? "random" : "none"));
+  }
+
+  // If imageMode says "url" but image is null, fix it
+  if (out.imageMode === "url" && !out.image?.url) out.imageMode = "none";
+
+  return out;
+}
+
 /* ---------------------------- Posts local cache --------------------------- */
 // Namespaced by app to avoid IG/FB collisions
 function cacheKey(feedId) {
@@ -304,7 +366,11 @@ export function AdminDashboard({
       adButtonText: "",
     });
   };
-  const openEdit = (p) => { setIsNew(false); setEditing({ ...p, showTime: p.showTime !== false }); };
+  const openEdit = (p) => {
+  setIsNew(false);
+  const norm = normalizePostMedia(p);
+  setEditing({ ...norm, showTime: norm.showTime !== false });
+};
 
   const removePost = (id) => {
     if (!confirm("Delete this post?")) return;
