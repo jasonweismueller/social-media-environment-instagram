@@ -73,6 +73,8 @@ function ImageCropper({
     onChange?.({ focalX, focalY, zoom: Number(next.toFixed(2)) });
   }, [disabled, src, zoom, onChange, focalX, focalY]);
 
+  console.log("ImageCropper render", { src, focalX, focalY, zoom });
+
   return (
     <div>
       <div
