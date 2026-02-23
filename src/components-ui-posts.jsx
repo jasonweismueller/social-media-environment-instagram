@@ -537,17 +537,22 @@ const seedParts = [
           }}
         />
       ) : image?.url ? (
-  <div
-    style={{
-      position: "absolute",
-      inset: 0,
-      backgroundImage: `url(${image.url})`,
-      backgroundRepeat: "no-repeat",
-      backgroundPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
-      backgroundSize: `${Math.max(1, Number(image.zoom ?? 1)) * 100}%`,
-    }}
-    aria-label={image.alt || ""}
-  />
+  (() => {
+    const z = Math.max(1, Number(image.zoom ?? 1));
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url(${image.url})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: `${image.focalX ?? 50}% ${image.focalY ?? 50}%`,
+          backgroundSize: z === 1 ? "cover" : `${z * 100}%`,
+        }}
+        aria-label={image.alt || ""}
+      />
+    );
+  })()
 ) : null}
     </div>
   </div>
