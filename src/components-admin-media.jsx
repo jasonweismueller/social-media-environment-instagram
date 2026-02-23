@@ -21,37 +21,54 @@ function ImageCropper({
   const wrapRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
-  const objectPosition = useMemo(() => `${focalX}% ${focalY}%`, [focalX, focalY]);
-  const bgSize = useMemo(() => `${Math.max(1, toNum(zoom, 1)) * 100}%`, [zoom]);
+  const x = clamp(toNum(focalX, 50), 0, 100);
+  const y = clamp(toNum(focalY, 50), 0, 100);
+  const z = clamp(toNum(zoom, 1), 1, 3);
+
+  const objectPosition = useMemo(() => `${x}% ${y}%`, [x, y]);
+  const bgSize = useMemo(() => `${z * 100}%`, [z]);
+
+  const emit = useCallback((next) => {
+    if (!onChange) return;
+    onChange({
+      focalX: clamp(Math.round(toNum(next.focalX, x)), 0, 100),
+      focalY: clamp(Math.round(toNum(next.focalY, y)), 0, 100),
+      zoom: clamp(toNum(next.zoom, z), 1, 3),
+    });
+  }, [onChange, x, y, z]);
 
   const updateFromXY = useCallback((clientX, clientY) => {
     const el = wrapRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
     const xPct = clamp(((clientX - rect.left) / rect.width) * 100, 0, 100);
     const yPct = clamp(((clientY - rect.top) / rect.height) * 100, 0, 100);
 
-    onChange?.({
-      focalX: Math.round(xPct),
-      focalY: Math.round(yPct),
-      zoom: Math.max(1, toNum(zoom, 1)),
-    });
-  }, [onChange, zoom]);
+    emit({ focalX: xPct, focalY: yPct, zoom: z });
+  }, [emit, z]);
 
   const onPointerDown = useCallback((e) => {
     if (disabled) return;
+    if (!src) return;
+
     // left click only (mouse)
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     setDragging(true);
+
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
     updateFromXY(e.clientX, e.clientY);
+
+    // stop image drag / highlight
     e.preventDefault();
-  }, [disabled, updateFromXY]);
+  }, [disabled, src, updateFromXY]);
 
   const onPointerMove = useCallback((e) => {
     if (disabled) return;
     if (!dragging) return;
+
     updateFromXY(e.clientX, e.clientY);
     e.preventDefault();
   }, [disabled, dragging, updateFromXY]);
@@ -65,15 +82,22 @@ function ImageCropper({
   const onWheel = useCallback((e) => {
     if (disabled) return;
     if (!src) return;
+
+    // Don’t hijack normal scroll.
+    // Trackpad pinch-to-zoom triggers ctrlKey on most browsers.
+    // Also allow Shift+wheel as an intentional zoom gesture.
+    const intendZoom = e.ctrlKey || e.metaKey || e.shiftKey;
+    if (!intendZoom) return;
+
     e.preventDefault();
 
-    // wheel up => zoom in
     const cur = clamp(toNum(zoom, 1), 1, 3);
-    const next = clamp(cur + (-e.deltaY * 0.0018), 1, 3);
-    onChange?.({ focalX, focalY, zoom: Number(next.toFixed(2)) });
-  }, [disabled, src, zoom, onChange, focalX, focalY]);
+    const delta = -e.deltaY;
 
-  console.log("ImageCropper render", { src, focalX, focalY, zoom });
+    // small smooth scaling
+    const next = clamp(cur + (delta * 0.0018), 1, 3);
+    emit({ focalX: x, focalY: y, zoom: Number(next.toFixed(2)) });
+  }, [disabled, src, zoom, emit, x, y]);
 
   return (
     <div>
@@ -89,14 +113,18 @@ function ImageCropper({
           overflow: "hidden",
           background: "#f3f4f6",
           userSelect: "none",
-          touchAction: "none", // CRITICAL for pointer dragging on touchpads/touch
           cursor: disabled ? "default" : (dragging ? "grabbing" : "grab"),
           boxShadow: "inset 0 0 0 1px rgba(0,0,0,.05)",
+
+          // IMPORTANT: only disable touch actions on the crop square itself.
+          // Using "none" everywhere can break scrolling on trackpads/mobile.
+          touchAction: "none",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
         onWheel={onWheel}
       >
         {src ? (
@@ -112,7 +140,15 @@ function ImageCropper({
             aria-label={alt || ""}
           />
         ) : (
-          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#9ca3af" }}>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              color: "#9ca3af",
+            }}
+          >
             No image
           </div>
         )}
@@ -121,8 +157,8 @@ function ImageCropper({
           <div
             style={{
               position: "absolute",
-              left: `calc(${focalX}% - 8px)`,
-              top: `calc(${focalY}% - 8px)`,
+              left: `calc(${x}% - 8px)`,
+              top: `calc(${y}% - 8px)`,
               width: 16,
               height: 16,
               borderRadius: "50%",
@@ -142,8 +178,8 @@ function ImageCropper({
             type="range"
             min={0}
             max={100}
-            value={focalX}
-            onChange={(e) => onChange?.({ focalX: Number(e.target.value), focalY, zoom })}
+            value={x}
+            onChange={(e) => emit({ focalX: Number(e.target.value), focalY: y, zoom: z })}
             disabled={disabled}
           />
         </label>
@@ -154,8 +190,8 @@ function ImageCropper({
             type="range"
             min={0}
             max={100}
-            value={focalY}
-            onChange={(e) => onChange?.({ focalX, focalY: Number(e.target.value), zoom })}
+            value={y}
+            onChange={(e) => emit({ focalX: x, focalY: Number(e.target.value), zoom: z })}
             disabled={disabled}
           />
         </label>
@@ -167,16 +203,16 @@ function ImageCropper({
             min={1}
             max={3}
             step={0.01}
-            value={toNum(zoom, 1)}
-            onChange={(e) => onChange?.({ focalX, focalY, zoom: Number(e.target.value) })}
+            value={z}
+            onChange={(e) => emit({ focalX: x, focalY: y, zoom: Number(e.target.value) })}
             disabled={disabled}
           />
-          <div className="subtle">{toNum(zoom, 1).toFixed(2)}×</div>
+          <div className="subtle">{z.toFixed(2)}×</div>
         </label>
       </div>
 
       <div className="subtle" style={{ marginTop: 4 }}>
-        Tip: drag inside the square to reposition; scroll to zoom; sliders fine-tune.
+        Tip: drag inside the square to reposition. Zoom with pinch/ctrl+scroll or Shift+scroll. Sliders fine-tune.
       </div>
     </div>
   );
@@ -202,7 +238,12 @@ function Thumb({ src, active, onClick, onRemove, idx }) {
         title={`Image ${idx + 1}`}
       >
         {src ? (
-          <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <img
+            src={src}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            draggable={false}
+          />
         ) : (
           <div style={{ width: "100%", height: "100%", background: "#f3f4f6" }} />
         )}
@@ -243,21 +284,34 @@ function CarouselEditor({ images, setImages, feedId, isNew }) {
     const picked = Array.from(files || []);
     if (!picked.length) return;
     const el = document.querySelector(".modal h3, .section-title");
+
     try {
       let count = 0;
       for (const f of picked) {
         const setPct = (pct) => {
           if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}% (${count + 1}/${picked.length})`;
         };
-        const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, prefix: "images", onProgress: setPct });
-        setImages((arr) => [...arr, { url: cdnUrl, alt: f.name || "Image", focalX: 50, focalY: 50, zoom: 1 }]);
+        const { cdnUrl } = await uploadFileToS3ViaSigner({
+          file: f,
+          feedId,
+          prefix: "images",
+          onProgress: setPct,
+        });
+
+        setImages((arr) => [
+          ...arr,
+          { url: cdnUrl, alt: f.name || "Image", focalX: 50, focalY: 50, zoom: 1 },
+        ]);
+
         count++;
       }
+
       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
       alert("Images uploaded ✔");
     } catch (e) {
       console.error(e);
       alert(String(e?.message || "Upload failed."));
+      if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
     }
   };
 
@@ -373,13 +427,12 @@ export function MediaFieldset({
         ),
       }));
     }
-    // run on post switch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id]);
 
-   // Single-image helpers (tolerate legacy shapes)
+  // Single-image helpers (tolerate legacy shapes)
   const imageObj =
-    !editing.image ? null
+    !editing?.image ? null
     : typeof editing.image === "string"
       ? { url: editing.image, alt: "Image", focalX: 50, focalY: 50, zoom: 1 }
       : {
@@ -395,8 +448,8 @@ export function MediaFieldset({
   const focalY = Number(imageObj?.focalY ?? 50);
   const zoom   = Number(imageObj?.zoom ?? 1);
 
-  const imageMode = editing.imageMode || "none";
-  const images = Array.isArray(editing.images) ? editing.images : [];
+  const imageMode = editing?.imageMode || "none";
+  const images = Array.isArray(editing?.images) ? editing.images : [];
 
   const setImages = (updater) =>
     setEditing((ed) => {
@@ -451,7 +504,9 @@ export function MediaFieldset({
                   imageMode: "multi",
                   images: (ed.images && ed.images.length)
                     ? ed.images.map(x => ({ zoom: 1, focalX: 50, focalY: 50, ...x }))
-                    : (ed.image && typeof ed.image === "object" && ed.image.url ? [{ zoom: 1, focalX: 50, focalY: 50, ...ed.image }] : []),
+                    : (ed.image && typeof ed.image === "object" && ed.image.url
+                        ? [{ zoom: 1, focalX: 50, focalY: 50, ...ed.image }]
+                        : []),
                 }));
                 return;
               }
@@ -491,7 +546,11 @@ export function MediaFieldset({
                     }
 
                     if (m === "random") {
-                      setEditing(ed => ({ ...ed, imageMode: "random", image: { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 } }));
+                      setEditing(ed => ({
+                        ...ed,
+                        imageMode: "random",
+                        image: { ...randomSVG("Image"), focalX: 50, focalY: 50, zoom: 1 },
+                      }));
                       return;
                     }
 
@@ -525,7 +584,7 @@ export function MediaFieldset({
                       imageMode: "url",
                       image: {
                         url: e.target.value,
-                        alt: imgObj?.alt || "Image",
+                        alt: imageObj?.alt || "Image",
                         focalX,
                         focalY,
                         zoom,
@@ -545,17 +604,20 @@ export function MediaFieldset({
                   onChange={async (e) => {
                     const f = e.target.files?.[0];
                     if (!f) return;
+
                     try {
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
+
                       const { cdnUrl } = await uploadFileToS3ViaSigner({
                         file: f,
                         feedId,
                         onProgress: setPct,
                         prefix: "images",
                       });
+
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
 
@@ -564,6 +626,7 @@ export function MediaFieldset({
                         imageMode: "url",
                         image: { alt: "Image", url: cdnUrl, focalX: 50, focalY: 50, zoom: 1 },
                       }));
+
                       alert("Image uploaded ✔");
                     } catch (err) {
                       console.error(err);
@@ -576,28 +639,28 @@ export function MediaFieldset({
               </label>
             )}
 
-         {imageMode !== "none" && imgUrl && (
-  <ImageCropper
-    src={imgUrl}
-    alt={imageObj?.alt || ""}
-    focalX={focalX}
-    focalY={focalY}
-    zoom={zoom}
-    onChange={({ focalX: x, focalY: y, zoom: z }) =>
-      setEditing((ed) => ({
-        ...ed,
-        image: {
-          ...(typeof ed.image === "object" && ed.image ? ed.image : {}),
-          url: imgUrl,                 // keep url stable
-          alt: imageObj?.alt || "Image",
-          focalX: x,
-          focalY: y,
-          zoom: Number(z ?? 1),
-        },
-      }))
-    }
-  />
-)}
+            {imageMode !== "none" && imgUrl && (
+              <ImageCropper
+                src={imgUrl}
+                alt={imageObj?.alt || ""}
+                focalX={focalX}
+                focalY={focalY}
+                zoom={zoom}
+                onChange={({ focalX: x, focalY: y, zoom: z }) =>
+                  setEditing((ed) => ({
+                    ...ed,
+                    image: {
+                      ...(typeof ed.image === "object" && ed.image ? ed.image : {}),
+                      url: imgUrl,
+                      alt: imageObj?.alt || "Image",
+                      focalX: x,
+                      focalY: y,
+                      zoom: Number(z ?? 1),
+                    },
+                  }))
+                }
+              />
+            )}
 
             {imageMode === "random" && editing.image?.svg && (
               <div
@@ -680,16 +743,26 @@ export function MediaFieldset({
                   type="file"
                   accept="video/*"
                   onChange={async (e) => {
-                    const f = e.target.files?.[0]; if (!f) return;
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+
                     try {
                       setUploadingVideo?.(true);
                       const setPct = (pct) => {
                         const el = document.querySelector(".modal h3, .section-title");
                         if (el && typeof pct === "number") el.textContent = `Uploading… ${pct}%`;
                       };
-                      const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, onProgress: setPct, prefix: "videos" });
+
+                      const { cdnUrl } = await uploadFileToS3ViaSigner({
+                        file: f,
+                        feedId,
+                        onProgress: setPct,
+                        prefix: "videos",
+                      });
+
                       const el = document.querySelector(".modal h3, .section-title");
                       if (el) el.textContent = isNew ? "Add Post" : "Edit Post";
+
                       setEditing(ed => ({ ...ed, videoMode: "url", video: { url: cdnUrl } }));
                       alert("Video uploaded ✔");
                     } catch (err) {
@@ -721,10 +794,16 @@ export function MediaFieldset({
                   type="file"
                   accept="image/*"
                   onChange={async (e) => {
-                    const f = e.target.files?.[0]; if (!f) return;
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+
                     try {
                       setUploadingPoster?.(true);
-                      const { cdnUrl } = await uploadFileToS3ViaSigner({ file: f, feedId, prefix: "posters" });
+                      const { cdnUrl } = await uploadFileToS3ViaSigner({
+                        file: f,
+                        feedId,
+                        prefix: "posters",
+                      });
                       setEditing(ed => ({ ...ed, videoPosterUrl: cdnUrl }));
                       alert("Poster uploaded ✔");
                     } catch (err) {
@@ -745,21 +824,24 @@ export function MediaFieldset({
                   type="checkbox"
                   checked={!!editing.videoAutoplayMuted}
                   onChange={(e) => setEditing(ed => ({ ...ed, videoAutoplayMuted: !!e.target.checked }))}
-                /> Autoplay muted
+                />{" "}
+                Autoplay muted
               </label>
               <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={!!editing.videoShowControls}
                   onChange={(e) => setEditing(ed => ({ ...ed, videoShowControls: !!e.target.checked }))}
-                /> Show controls
+                />{" "}
+                Show controls
               </label>
               <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={!!editing.videoLoop}
                   onChange={(e) => setEditing(ed => ({ ...ed, videoLoop: !!e.target.checked }))}
-                /> Loop
+                />{" "}
+                Loop
               </label>
             </div>
           </>
